@@ -215,7 +215,7 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_DestroyMRec = env->GetMethodID(cls, "destroyMRec", "(Ljava/lang/String;)V");
     g_applovin.m_LoadRewardedAd = env->GetMethodID(cls, "loadRewardedAd", "(Ljava/lang/String;)V");
     g_applovin.m_IsRewardedAdReady = env->GetMethodID(cls, "isRewardedAdReady", "(Ljava/lang/String;)Z");
-    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;Ljava/lang/String;)V");
+    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;)V");
     g_applovin.m_SetRewardedAdExtraParameter = env->GetMethodID(cls, "setRewardedAdExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 }
 

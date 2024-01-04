@@ -12,7 +12,7 @@ local ad_units = {
 
 local ui_components = {}
 
-local ad_type = ""
+local selected_ad_type = ""
 local ad_unit = ""
 local isShowingAd = false;
 
@@ -26,38 +26,40 @@ local function reset_ui_components()
 	gui.set_text(ui_components.load_button_label, "Load")
 	gui.set_enabled(ui_components.load_button, true)
 	gui.set_enabled(ui_components.loading_text, false)
-
+	
 	log.clear()
 end
 
-local function load_ad()
-	if ad_type == "Interstitial" then
+local function load_ad()	
+	if selected_ad_type == "Interstitial" then
 		applovin.load_interstitial(ad_unit)
-	elseif ad_type == "Rewarded" then
+	elseif selected_ad_type == "Rewarded" then
 		applovin.load_rewarded_ad(ad_unit)
-	elseif ad_type == "MRec" then
+	elseif selected_ad_type == "MRec" then
 		applovin.create_mrec(ad_unit, "Center")
-	elseif ad_type == "Banner" then
+	elseif selected_ad_type == "Banner" then
 		applovin.create_banner(ad_unit, "TopCenter")
 	end
 end
 
 local function show_ad()
-	if ad_type == "Interstitial" then
+	if selected_ad_type == "Interstitial" then
 		applovin.show_interstitial(ad_unit)
-	elseif ad_type == "Rewarded" then
+	elseif selected_ad_type == "Rewarded" then
 		applovin.show_rewarded_ad(ad_unit)
-	elseif ad_type == "MRec" then
+	elseif selected_ad_type == "MRec" then
 		applovin.show_mrec(ad_unit)
-	elseif ad_type == "Banner" then
+	elseif selected_ad_type == "Banner" then
 		applovin.show_banner(ad_unit)
 	end
 end
 
 function M.setup(ad_type)
 	reset_ui_components()
-	this.ad_type = ad_type
+	
+	selected_ad_type = ad_type
 	ad_unit = ad_units[ad_type]
+	
 	gui.set_text(ui_components.ad_type_text, ad_type)
 end
 
@@ -83,9 +85,9 @@ end
 
 function M.destroy_current_ad()
 	if isShowingAd then
-		if ad_type == "MRec" then
+		if selected_ad_type == "MRec" then
 			applovin.destroy_mrec(ad_unit)
-		elseif ad_type == "Banner" then
+		elseif selected_ad_type == "Banner" then
 			applovin.destroy_banner(ad_unit)
 		end
 	end

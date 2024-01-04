@@ -42,3 +42,4 @@ luac.out
 /.internal
 /build
 .DS_Store
+.idea

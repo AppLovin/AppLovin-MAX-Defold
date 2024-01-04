@@ -9,7 +9,7 @@ width = 720
 height = 1280
 
 [project]
-title = AppLovin
+title = AppLovinMAXDefoldDemo
 version = 1.0.0
 dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 
@@ -17,8 +17,8 @@ dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 include_dirs = extension-applovin
 
 [android]
-iap_provider = GooglePlay
 package = com.revolverolver.fliptrickster
+minimum_sdk_version = 21
 debuggable = 1
 
 [applovin]
@@ -26,5 +26,5 @@ admob_android_appid = ca-app-pub-3940256099942544~3347511713
 admob_ios_appid = ca-app-pub-3940256099942544~1458002511
 
 [ios]
-bundle_identifier = com.defold.applovin
+bundle_identifier = com.revolverolver.fliptrickster
 

@@ -1,11 +1,11 @@
--- if not applovin then
---     error("Extension works only on IOS and Android")
---     return
--- end
+if not applovin then
+    error("Extension works only on iOS and Android")
+    return
+end
 
 local log = require("example.log")
 local ui = require("example.ui")
-local ad_test = require("example.ad_test")
+local ads = require("example.ads")
 local callback = require("example.callback")
 local dirtylarry = require("dirtylarry.dirtylarry")
 
@@ -17,7 +17,7 @@ local data = {
         ["mrec"] = {},
         ["banner"] = {},
     },
-    ["ad_test_page"] = { type = "page",
+    ["ads_page"] = { type = "page",
         ["back"] = {},
         ["load"] = {},
     }
@@ -26,7 +26,7 @@ local data = {
 local actions = {}
 
 actions.back = function(self, el)
-    ad_test.destroy_current_ad()
+    ads.destroy_current_ad()
     
     ui.disable_all(self.ui, "page")
     ui.enable(self.ui.main_page, true)
@@ -38,34 +38,39 @@ actions.mediation_debugger = function(self, el)
 end
 
 actions.interstitial = function(self, el)
-    setup_ad_test_page(self, "Interstitial")
+    setup_ads_page(self, "Interstitial")
 end
 
 actions.rewarded = function(self, el)
-    setup_ad_test_page(self, "Rewarded")
+    setup_ads_page(self, "Rewarded")
 end
 
 actions.mrec = function(self, el)
-    setup_ad_test_page(self, "MRec")
+    setup_ads_page(self, "MRec")
 end
 
 actions.banner = function(self, el)
-    setup_ad_test_page(self, "Banner")
+    setup_ads_page(self, "Banner")
 end
 
 actions.load = function(self, el)
-    ad_test.load_button_clicked()
+    ads.load_button_clicked()
 end
 
-function setup_ad_test_page(self, ad_type)
+function setup_ads_page(self, ad_type)
     ui.disable_all(self.ui, "page")
-    ui.enable(self.ui.ad_test_page, true)
+    ui.enable(self.ui.ads_page, true)
     ui.enable(self.ui.back, true)
 
-    ad_test.setup(ad_type)
+    ads.setup(ad_type)
 end
 
 function init(self)
+    applovin.set_has_user_consent(true)
+    applovin.set_is_age_restricted_user(false)
+    applovin.set_do_not_sell(false)
+    applovin.set_verbose_logging_enabled(true)
+    
     local sysinfo = sys.get_sys_info()
     if sysinfo.system_name == "Android" then
         applovin.initialize("hBDh6tzZrp-fWye63N4nhbgw8umnTzD99QsGIpq8bpo7lRDppHZVuEQ17Bpa80lIRaTlONt-Af6v5JiubGOUVp")

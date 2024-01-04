@@ -1,5 +1,5 @@
 local log = require("example.log")
-local ad_test = require("example.ad_test")
+local ads = require("example.ads")
 
 local M = {}
 
@@ -23,7 +23,14 @@ local function applovin_callback(self, name, params)
     name == "OnRewardedAdLoadedEvent" or
     name == "OnMRecAdLoadedEvent" or
     name == "OnBannerAdLoadedEvent" then
-        ad_test.on_ad_loaded(params)
+        ads.on_ad_loaded(params)
+    end
+
+    if name == "OnInterstitialAdLoadFailedEvent" or
+    name == "OnRewardedAdLoadFailedEvent" or
+    name == "OnMRecAdLoadFailedEvent" or
+    name == "OnBannerAdLoadFailedEvent" then
+        ads.on_ad_load_failed(params)
     end
 end
 

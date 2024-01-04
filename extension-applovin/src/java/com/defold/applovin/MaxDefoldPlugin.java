@@ -487,10 +487,10 @@ public class MaxDefoldPlugin
         return rewardedAd.isReady();
     }
 
-    public void showRewardedAd(final String adUnitId, final String placement)
+    public void showRewardedAd(final String adUnitId)
     {
         MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.showAd( placement );
+        rewardedAd.showAd();
     }
 
     public void setRewardedAdExtraParameter(final String adUnitId, final String key, final String value)
@@ -758,7 +758,7 @@ public class MaxDefoldPlugin
         sendDefoldEvent( name, getAdInfo( ad ) );
     }
 
-//     region Internal Methods
+    // region Internal Methods
     private void createAdView(final String adUnitId, final MaxAdFormat adFormat, final String adViewPosition)
     {
         // Run on main thread to ensure there are no concurrency issues with other ad view methods
@@ -783,10 +783,8 @@ public class MaxDefoldPlugin
                 {
                     final Activity currentActivity = getGameActivity();
                     final RelativeLayout relativeLayout = new RelativeLayout( currentActivity );
-//                    relativeLayout.setBackgroundColor( Color.BLUE );
-
-                    currentActivity.getWindowManager().addView( relativeLayout, getParameters() );
-
+                    currentActivity.addContentView( relativeLayout, new LinearLayout.LayoutParams( LinearLayout.LayoutParams.MATCH_PARENT,
+                                                                                                   LinearLayout.LayoutParams.MATCH_PARENT ) );
                     relativeLayout.addView( adView );
 
                     // Position ad view immediately so if publisher sets color before ad loads, it will not be the size of the screen
@@ -804,17 +802,6 @@ public class MaxDefoldPlugin
                 }
             }
         } );
-    }
-
-    private WindowManager.LayoutParams getParameters() {
-        WindowManager.LayoutParams windowParams = new WindowManager.LayoutParams();
-        windowParams.x = WindowManager.LayoutParams.WRAP_CONTENT;
-        windowParams.y = WindowManager.LayoutParams.WRAP_CONTENT;
-        windowParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
-        windowParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
-        windowParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-        windowParams.gravity = Gravity.TOP;
-        return windowParams;
     }
 
     private void setAdViewPlacement(final String adUnitId, final MaxAdFormat adFormat, final String placement)
@@ -1221,7 +1208,7 @@ public class MaxDefoldPlugin
             }
         }
 
-        adView.setGravity( gravity );
+        relativeLayout.setGravity( gravity );
     }
     // endregion
 
