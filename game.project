@@ -22,10 +22,6 @@ package = YOUR_PACKAGE_NAME
 minimum_sdk_version = 21
 debuggable = 1
 
-[applovin]
-admob_android_appid = ca-app-pub-3940256099942544~3347511713
-admob_ios_appid = ca-app-pub-3940256099942544~1458002511
-
 [ios]
 bundle_identifier = YOUR_BUNDLE_IDENTIFIER
 
