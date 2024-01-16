@@ -76,9 +76,9 @@ function init(self)
     
     local sysinfo = sys.get_sys_info()
     if sysinfo.system_name == "Android" then
-        applovin.initialize("hBDh6tzZrp-fWye63N4nhbgw8umnTzD99QsGIpq8bpo7lRDppHZVuEQ17Bpa80lIRaTlONt-Af6v5JiubGOUVp")
+        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
     elseif sysinfo.system_name == "iPhone OS" then
-        applovin.initialize("hBDh6tzZrp-fWye63N4nhbgw8umnTzD99QsGIpq8bpo7lRDppHZVuEQ17Bpa80lIRaTlONt-Af6v5JiubGOUVp")
+        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
     end
     
     self.console = gui.get_node("console")

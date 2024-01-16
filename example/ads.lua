@@ -4,10 +4,10 @@ local log = require("example.log")
 local M = {}
 
 local ad_units = { 
-	Interstitial = "65d8d0195e50bda6",
-	Rewarded = "82076aefed4737ed",
-	Banner = "3c2e14fa5f22c4f6",
-	MRec = "f65a23962fa00e5"
+	Interstitial = "YOUR_INTER_AD_UNIT",
+	Rewarded = "YOUR_REWARDED_AD_UNIT",
+	Banner = "YOUR_BANNER_AD_UNIT",
+	MRec = "YOUR_MREC_AD_UNIT"
 }
 
 local ui_components = {}
