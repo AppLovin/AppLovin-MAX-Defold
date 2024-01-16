@@ -7,10 +7,10 @@
     <application
         android:networkSecurityConfig="@xml/network_security_config" >
 
-        <!-- AppLovin -->
+        <!-- Google Ads -->
         <meta-data
-            android:name="applovin.sdk.key"
-            android:value="hBDh6tzZrp-fWye63N4nhbgw8umnTzD99QsGIpq8bpo7lRDppHZVuEQ17Bpa80lIRaTlONt-Af6v5JiubGOUVp" />
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3555987499620362~7190899313" />
 
     </application>
 </manifest>

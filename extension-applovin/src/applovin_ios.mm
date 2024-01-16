@@ -17,12 +17,12 @@ void Initialize_Ext(const char* version, const char* extVersion)
 
 void OnResume()
 {
-
+    // no-op
 }
 
 void OnPause()
 {
-
+    // no-op
 }
 
 void Initialize(const char* sdkKey)
@@ -69,6 +69,36 @@ void SetDoNotSell(bool doNotSell)
 bool IsDoNotSell()
 {
     return [iosPlugin isDoNotSell];
+}
+
+void SetTermsAndPrivacyPolicyFlowEnabled(bool enabled)
+{
+    [iosPlugin setTermsAndPrivacyPolicyFlowEnabled: enabled];
+}
+
+void SetPrivacyPolicyUrl(const char* urlString)
+{
+    [iosPlugin setPrivacyPolicyURL: [NSString stringWithUTF8String: urlString]];
+}
+
+void SetTermsOfServiceUrl(const char* urlString)
+{
+    [iosPlugin setTermsOfServiceURL: [NSString stringWithUTF8String: urlString]];
+}
+
+void SetConsentFlowDebugUserGeography(const char* userGeographyString)
+{
+    [iosPlugin setConsentFlowDebugUserGeography: [NSString stringWithUTF8String: userGeographyString]];
+}
+
+void ShowCmpForExistingUser()
+{
+    [iosPlugin showCMPForExistingUser];
+}
+
+bool HasSupportedCmp()
+{
+    return [iosPlugin hasSupportedCMP];
 }
 
 bool IsTablet()

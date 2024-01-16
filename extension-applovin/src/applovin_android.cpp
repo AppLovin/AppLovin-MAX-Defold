@@ -34,6 +34,12 @@ struct AppLovin
     jmethodID m_IsAgeRestrictedUser;
     jmethodID m_SetDoNotSell;
     jmethodID m_IsDoNotSell;
+    jmethodID m_SetTermsAndPrivacyPolicyFlowEnabled;
+    jmethodID m_SetPrivacyPolicyUrl;
+    jmethodID m_SetTermsOfServiceUrl;
+    jmethodID m_SetConsentFlowDebugUserGeography;
+    jmethodID m_ShowCmpForExistingUser;
+    jmethodID m_HasSupportedCmp;
     jmethodID m_IsTablet;
     jmethodID m_SetUserId;
     jmethodID m_SetMuted;
@@ -189,6 +195,12 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_IsAgeRestrictedUser = env->GetMethodID(cls, "isAgeRestrictedUser", "()Z");
     g_applovin.m_SetDoNotSell = env->GetMethodID(cls, "setDoNotSell", "(Z)V");
     g_applovin.m_IsDoNotSell = env->GetMethodID(cls, "isDoNotSell", "()Z");
+    g_applovin.m_SetTermsAndPrivacyPolicyFlowEnabled = env->GetMethodID(cls, "setTermsAndPrivacyPolicyFlowEnabled", "(Z)V");
+    g_applovin.m_SetPrivacyPolicyUrl = env->GetMethodID(cls, "setPrivacyPolicyUrl", "(Ljava/lang/String;)V");
+    g_applovin.m_SetTermsOfServiceUrl = env->GetMethodID(cls, "setTermsOfServiceUrl", "(Ljava/lang/String;)V");
+    g_applovin.m_SetConsentFlowDebugUserGeography = env->GetMethodID(cls, "setConsentFlowDebugUserGeography", "(Ljava/lang/String;)V");
+    g_applovin.m_ShowCmpForExistingUser = env->GetMethodID(cls, "showCmpForExistingUser", "()V");
+    g_applovin.m_HasSupportedCmp = env->GetMethodID(cls, "hasSupportedCmp", "()Z");
     g_applovin.m_IsTablet = env->GetMethodID(cls, "isTablet", "()Z");
     g_applovin.m_SetUserId = env->GetMethodID(cls, "setUserId", "(Ljava/lang/String;)V");
     g_applovin.m_SetMuted = env->GetMethodID(cls, "setMuted", "(Z)V");
@@ -302,6 +314,36 @@ void SetDoNotSell(bool doNotSell)
 bool IsDoNotSell()
 {
     return CallBoolMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsDoNotSell);
+}
+
+void SetTermsAndPrivacyPolicyFlowEnabled(bool enabled)
+{
+    CallVoidMethodBool(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetTermsAndPrivacyPolicyFlowEnabled, enabled);
+}
+
+void SetPrivacyPolicyUrl(const char* urlString)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetPrivacyPolicyUrl, urlString);
+}
+
+void SetTermsOfServiceUrl(const char* urlString)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetTermsOfServiceUrl, urlString);
+}
+
+void SetConsentFlowDebugUserGeography(const char* userGeographyString)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetConsentFlowDebugUserGeography, userGeographyString);
+}
+
+void ShowCmpForExistingUser()
+{
+    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowCmpForExistingUser);
+}
+
+bool HasSupportedCmp()
+{
+    return CallBoolMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_HasSupportedCmp);
 }
 
 bool IsTablet()

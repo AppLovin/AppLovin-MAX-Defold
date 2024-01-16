@@ -3,15 +3,6 @@ local ads = require("example.ads")
 
 local M = {}
 
-local function callback_logger(name, params)
-    print(name)
-    local msg = log.get_table_as_str(params)
-    if msg then
-        print(msg)
-    end
-    print("\n")
-end
-
 local function applovin_callback(self, name, params)
     print(name)
 

@@ -1,7 +1,50 @@
+// Repos
 repositories {
     google()
     mavenCentral()
+    maven { url "https://artifactory.bidmachine.io/bidmachine" }
+    maven { url "https://cboost.jfrog.io/artifactory/chartboost-ads/" }
+    maven { url "https://android-sdk.is.com" }
+    maven { url "https://imobile-maio.github.io/maven" }
+    maven { url "https://dl-maven-android.mintegral.com/repository/mbridge_android_sdk_oversea" }
+    maven { url "https://fan-adn.github.io/nendSDK-Android-lib/library" }
+    maven { url "https://maven.ogury.co" }
+    maven { url "https://artifact.bytedance.com/repository/pangle" }
+    maven { url "https://s3.amazonaws.com/smaato-sdk-releases/" }
+    maven { url "https://verve.jfrog.io/artifactory/verve-gradle-release" }
 }
+
 dependencies {
     implementation 'com.applovin:applovin-sdk:+'
+    implementation 'com.applovin.mediation:adcolony-adapter:+'
+//    implementation 'com.applovin.mediation:amazon-tam-adapter:+'
+//    implementation 'com.amazon.android:aps-sdk:+'  Error
+    implementation 'com.applovin.mediation:bidmachine-adapter:+'
+    implementation 'com.applovin.mediation:chartboost-adapter:+'
+    implementation 'com.google.android.gms:play-services-base:16.1.0'
+//    implementation 'com.applovin.mediation:criteo-adapter:+' Error
+    implementation 'com.applovin.mediation:fyber-adapter:+'
+    implementation 'com.applovin.mediation:google-ad-manager-adapter:+'
+    implementation 'com.applovin.mediation:google-adapter:+'
+    implementation 'com.applovin.mediation:hyprmx-adapter:+'
+//    implementation 'com.applovin.mediation:inmobi-adapter:+'
+    implementation 'com.squareup.picasso:picasso:2.71828'
+    implementation 'androidx.recyclerview:recyclerview:1.1.0'
+    implementation 'com.applovin.mediation:ironsource-adapter:+'
+    implementation 'com.applovin.mediation:vungle-adapter:+'
+    implementation 'com.applovin.mediation:line-adapter:+'
+//    implementation 'com.applovin.mediation:maio-adapter:+' Error
+    implementation 'com.applovin.mediation:facebook-adapter:+'
+    implementation 'com.applovin.mediation:mintegral-adapter:+'
+    implementation 'com.applovin.mediation:mobilefuse-adapter:+'
+    implementation 'com.applovin.mediation:mytarget-adapter:+'
+    implementation 'com.applovin.mediation:nend-adapter:+'
+    implementation 'com.applovin.mediation:ogury-presage-adapter:+'
+    implementation 'com.applovin.mediation:bytedance-adapter:+'
+//    implementation 'com.applovin.mediation:smaato-adapter:+' Error
+    implementation 'com.applovin.mediation:unityads-adapter:+'
+    implementation 'com.applovin.mediation:verve-adapter:+'
+    implementation 'com.applovin.mediation:yandex-adapter:+'
+
+    implementation 'com.google.android.ump:user-messaging-platform:2.1.0'
 }

@@ -37,6 +37,18 @@ void SetDoNotSell(bool doNotSell);
 
 bool IsDoNotSell();
 
+void SetTermsAndPrivacyPolicyFlowEnabled(bool enabled);
+
+void SetPrivacyPolicyUrl(const char* urlString);
+
+void SetTermsOfServiceUrl(const char* urlString);
+
+void SetConsentFlowDebugUserGeography(const char* userGeographyString);
+
+void ShowCmpForExistingUser();
+
+bool HasSupportedCmp();
+
 bool IsTablet();
 
 void SetUserId(const char* userId);

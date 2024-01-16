@@ -66,10 +66,13 @@ function setup_ads_page(self, ad_type)
 end
 
 function init(self)
-    applovin.set_has_user_consent(true)
-    applovin.set_is_age_restricted_user(false)
-    applovin.set_do_not_sell(false)
+    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
+
     applovin.set_verbose_logging_enabled(true)
+    applovin.set_terms_and_privacy_policy_flow_enabled(true)
+    applovin.set_privacy_policy_url("https://lionstudios.cc/privacy/")
+    applovin.set_terms_of_service_url("https://lionstudios.cc/terms/")
+    applovin.set_consent_flow_debug_user_geography("gdpr")
     
     local sysinfo = sys.get_sys_info()
     if sysinfo.system_name == "Android" then
@@ -77,8 +80,6 @@ function init(self)
     elseif sysinfo.system_name == "iPhone OS" then
         applovin.initialize("hBDh6tzZrp-fWye63N4nhbgw8umnTzD99QsGIpq8bpo7lRDppHZVuEQ17Bpa80lIRaTlONt-Af6v5JiubGOUVp")
     end
-
-    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
     
     self.console = gui.get_node("console")
     self.ui = ui.fill_tree(data, actions)

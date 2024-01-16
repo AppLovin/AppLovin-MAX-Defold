@@ -1,2 +1,36 @@
-platform :ios, '10.0'
+# Sources
+source 'https://cdn.cocoapods.org/'
+
+# Settings
+inhibit_all_warnings!
+
 pod 'AppLovinSDK'
+pod 'AppLovinMediationAdColonyAdapter'
+pod 'AppLovinMediationAmazonAdMarketplaceAdapter'
+pod 'AmazonPublisherServicesSDK'
+# pod 'AppLovinMediationBidMachineAdapter'
+pod 'AppLovinMediationChartboostAdapter'
+# pod 'AppLovinMediationCSJAdapter'
+pod 'AppLovinMediationFyberAdapter'
+pod 'AppLovinMediationGoogleAdManagerAdapter'
+pod 'AppLovinMediationGoogleAdapter'
+pod 'AppLovinMediationHyprMXAdapter'
+pod 'AppLovinMediationInMobiAdapter'
+pod 'AppLovinMediationIronSourceAdapter'
+pod 'AppLovinMediationVungleAdapter'
+pod 'AppLovinMediationLineAdapter'
+pod 'AppLovinMediationMaioAdapter'
+pod 'AppLovinMediationFacebookAdapter'
+pod 'AppLovinMediationMintegralAdapter'
+pod 'AppLovinMediationMobileFuseAdapter'
+pod 'AppLovinMediationMyTargetAdapter'
+pod 'AppLovinMediationNendAdapter'
+pod 'AppLovinMediationOguryPresageAdapter'
+#pod 'AppLovinMediationByteDanceAdapter' PAGAdSDK.bundle Warning You need to replace the PAGAdSDK.bundle file with the 5.7.0.7 version 
+pod 'AppLovinMediationSmaatoAdapter'
+# pod 'AppLovinMediationTencentGDTAdapter'
+pod 'AppLovinMediationUnityAdsAdapter'
+# pod 'AppLovinMediationVerveAdapter'
+# pod 'AppLovinMediationYandexAdapter'
+
+pod 'Google-Mobile-Ads-SDK'

@@ -4,10 +4,10 @@ local log = require("example.log")
 local M = {}
 
 local ad_units = { 
-	Interstitial = "f5df6799ac75cd34",
-	Rewarded = "49cdb15b16042a49",
+	Interstitial = "65d8d0195e50bda6",
+	Rewarded = "82076aefed4737ed",
 	Banner = "3c2e14fa5f22c4f6",
-	MRec = "6e882d2f921d6d7c"
+	MRec = "f65a23962fa00e5"
 }
 
 local ui_components = {}
@@ -23,6 +23,7 @@ local function reset_ui_components()
 		load_button_label = gui.get_node("load/larrylabel"),
 		loading_text = gui.get_node("loading")
 	}
+	
 	gui.set_text(ui_components.load_button_label, "Load")
 	gui.set_enabled(ui_components.load_button, true)
 	gui.set_enabled(ui_components.loading_text, false)
@@ -30,15 +31,15 @@ local function reset_ui_components()
 	log.clear()
 end
 
-local function load_ad()	
+local function load_ad()
 	if selected_ad_type == "Interstitial" then
 		applovin.load_interstitial(ad_unit)
 	elseif selected_ad_type == "Rewarded" then
 		applovin.load_rewarded_ad(ad_unit)
 	elseif selected_ad_type == "MRec" then
-		applovin.create_mrec(ad_unit, "Center")
+		applovin.create_mrec(ad_unit, "center")
 	elseif selected_ad_type == "Banner" then
-		applovin.create_banner(ad_unit, "TopCenter")
+		applovin.create_banner(ad_unit, "top_center")
 	end
 end
 

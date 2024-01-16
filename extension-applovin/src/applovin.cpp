@@ -16,13 +16,7 @@ namespace dmAppLovin {
 static int Lua_Initialize(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-    if (lua_type(L, 1) != LUA_TSTRING)
-    {
-        return DM_LUA_ERROR("Expected string, got %s. Wrong type for sdk_key variable '%s'.", luaL_typename(L, 1), lua_tostring(L, 1));
-    }
-
     const char* lua_sdkKey = luaL_checkstring(L, 1);
-
     Initialize(lua_sdkKey);
     return 0;
 }
@@ -37,10 +31,6 @@ static int Lua_ShowMediationDebugger(lua_State* L)
 static int Lua_LoadInterstitial(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-    if (lua_type(L, 1) != LUA_TSTRING)
-    {
-        return DM_LUA_ERROR("Expected string, got %s. Wrong type for ad_unit variable '%s'.", luaL_typename(L, 1), lua_tostring(L, 1));
-    }
     const char* lua_adUnitId = luaL_checkstring(L, 1);
     LoadInterstitial(lua_adUnitId);
     return 0;
@@ -49,10 +39,6 @@ static int Lua_LoadInterstitial(lua_State* L)
 static int Lua_ShowInterstitial(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-    if (lua_type(L, 1) != LUA_TSTRING)
-    {
-        return DM_LUA_ERROR("Expected string, got %s. Wrong type for ad_unit variable '%s'.", luaL_typename(L, 1), lua_tostring(L, 1));
-    }
     const char* lua_adUnitId = luaL_checkstring(L, 1);
     ShowInterstitial(lua_adUnitId);
     return 0;
@@ -61,12 +47,7 @@ static int Lua_ShowInterstitial(lua_State* L)
 static int Lua_IsInterstitialReady(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 1);
-    if (lua_type(L, 1) != LUA_TSTRING)
-    {
-        return DM_LUA_ERROR("Expected string, got %s. Wrong type for ad_unit variable '%s'.", luaL_typename(L, 1), lua_tostring(L, 1));
-    }
     const char* lua_adUnitId = luaL_checkstring(L, 1);
-
     bool isReady = IsInterstitialReady(lua_adUnitId);
     lua_pushboolean(L, isReady);
     return 1;
@@ -128,6 +109,54 @@ static int Lua_IsDoNotSell(lua_State* L)
     DM_LUA_STACK_CHECK(L, 1);
     bool isDoNotSell = IsDoNotSell();
     lua_pushboolean(L, isDoNotSell);
+    return 1;
+}
+
+static int Lua_SetTermsAndPrivacyPolicyFlowEnabled(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    luaL_checktype(L, 1, LUA_TBOOLEAN);
+    bool enabled = lua_toboolean(L, 1);
+    SetTermsAndPrivacyPolicyFlowEnabled(enabled);
+    return 0;
+}
+
+static int Lua_SetPrivacyPolicyUrl(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* lua_urlString = luaL_checkstring(L, 1);
+    SetPrivacyPolicyUrl(lua_urlString);
+    return 0;
+}
+
+static int Lua_SetTermsOfServiceUrl(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* lua_urlString = luaL_checkstring(L, 1);
+    SetTermsOfServiceUrl(lua_urlString);
+    return 0;
+}
+
+static int Lua_SetConsentFlowDebugUserGeography(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* lua_urlString = luaL_checkstring(L, 1);
+    SetConsentFlowDebugUserGeography(lua_urlString);
+    return 0;
+}
+
+static int Lua_ShowCmpForExistingUser(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ShowCmpForExistingUser();
+    return 0;
+}
+
+static int Lua_HasSupportedCmp(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    bool hasSupportedCmp = HasSupportedCmp();
+    lua_pushboolean(L, hasSupportedCmp);
     return 1;
 }
 
@@ -406,6 +435,12 @@ static const luaL_reg Module_methods[] =
     {"is_age_restricted_user", Lua_IsAgeRestrictedUser},
     {"set_do_not_sell", Lua_SetDoNotSell},
     {"is_do_not_sell", Lua_IsDoNotSell},
+    {"set_terms_and_privacy_policy_flow_enabled", Lua_SetTermsAndPrivacyPolicyFlowEnabled},
+    {"set_privacy_policy_url", Lua_SetPrivacyPolicyUrl},
+    {"set_terms_of_service_url", Lua_SetTermsOfServiceUrl},
+    {"set_consent_flow_debug_user_geography", Lua_SetConsentFlowDebugUserGeography},
+    {"show_cmp_for_existing_user", Lua_ShowCmpForExistingUser},
+    {"has_supported_cmp", Lua_HasSupportedCmp},
     {"is_tablet", Lua_IsTablet},
     {"set_user_id", Lua_SetUserId},
     {"set_muted", Lua_SetMuted},
@@ -442,18 +477,6 @@ static void LuaInit(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     luaL_register(L, MODULE_NAME, Module_methods);
-
-    #define SETCONSTANT(name) \
-    lua_pushnumber(L, (lua_Number) name); \
-    lua_setfield(L, -2, #name); \
-
-    SETCONSTANT(MSG_INIT)
-
-    SETCONSTANT(EVENT_JSON_ERROR)
-    SETCONSTANT(EVENT_INIT_COMPLETE)
-
-    #undef SETCONSTANT
-
     lua_pop(L, 1);
 }
 
@@ -475,9 +498,9 @@ static dmExtension::Result InitializeAppLovin(dmExtension::Params* params)
     defoldEngineVersion = lua_tostring(params->m_L, -1);     // get return value
     lua_pop(params->m_L, 3);                                 // pop result, function, 'sys'
 
-    const char* extVer = dmConfigFile::GetString(params->m_ConfigFile, "project.version", "0.0");
+    const char* extensionVersion = dmConfigFile::GetString(params->m_ConfigFile, "project.version", "0.0");
     
-    Initialize_Ext(defoldEngineVersion, extVer);
+    Initialize_Ext(defoldEngineVersion, extensionVersion);
     InitializeCallback();
     return dmExtension::RESULT_OK;
 }

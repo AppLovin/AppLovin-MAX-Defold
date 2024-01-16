@@ -11,6 +11,7 @@ height = 1280
 [project]
 title = AppLovinMAXDefoldDemo
 version = 1.0.0
+bundle_resources = /extension-applovin/res/ios
 dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 
 [library]
@@ -26,5 +27,5 @@ admob_android_appid = ca-app-pub-3940256099942544~3347511713
 admob_ios_appid = ca-app-pub-3940256099942544~1458002511
 
 [ios]
-bundle_identifier = com.revolverolver.fliptrickster
+bundle_identifier = com.revolverolver.flipmania
 

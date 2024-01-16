@@ -1,0 +1,457 @@
+- name: applovin
+  type: table
+  desc: Functions and constants for interacting with AppLovin SDK.
+
+  members:
+
+#*****************************************************************************************************
+
+  - name: initialize
+    type: function
+    desc: Initialize the AppLovin SDK with the provided SDK key.
+    parameters:
+    - name: sdk_key
+      type: string
+
+#*****************************************************************************************************
+
+  - name: show_mediation_debugger
+    type: function
+    desc: Displays the Mediation Debugger.
+
+#*****************************************************************************************************
+
+  - name: is_initialized
+    type: function
+    desc: Checks if the AppLovin SDK has been initialized.
+    returns:
+    - name: is_initialized
+      type: boolean
+      desc: Returns true if the SDK is initialized, false otherwise.
+
+#*****************************************************************************************************
+
+  - name: set_has_user_consent
+    type: function
+    desc: Sets whether the user has provided consent for interest-based advertising.
+    parameters:
+    - name: has_user_consent
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: has_user_consent
+    type: function
+    desc: Checks if the user has provided consent for interest-based advertising.
+    returns:
+    - name: has_user_consent
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_is_age_restricted_user
+    type: function
+    desc: Sets whether the user is considered to be in an age-restricted category.
+    parameters:
+    - name: is_age_restricted_user
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_age_restricted_user
+    type: function
+    desc: Checks if the user is considered to be in an age-restricted category.
+    returns:
+    - name: is_age_restricted_user
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_do_not_sell
+    type: function
+    desc: Sets whether the user has chosen to opt out of the sale of their personal information.
+    parameters:
+    - name: do_not_sell
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_do_not_sell
+    type: function
+    desc: Checks if the user has chosen to opt out of the sale of their personal information.
+    returns:
+    - name: do_not_sell
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_terms_and_privacy_policy_flow_enabled
+    type: function
+    desc: Enables or disables the MAX Terms and Privacy Policy Flow.
+    parameters:
+    - name: enabled
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_privacy_policy_url
+    type: function
+    desc: Sets the privacy policy URL for MAX Terms and Privacy Policy Flow.
+    parameters:
+    - name: url_string
+      type: string
+
+#*****************************************************************************************************
+
+  - name: set_terms_of_service_url
+    type: function
+    desc: Sets terms of service URL for MAX Terms and Privacy Policy Flow.
+    parameters:
+    - name: url_string
+      type: string
+
+#*****************************************************************************************************
+
+  - name: set_consent_flow_debug_user_geography
+    type: function
+    desc: Sets the user geography for debugging purposes in the consent flow.
+    parameters:
+    - name: user_geography_string
+      type: string
+      desc: "gdpr" or "other"
+
+#*****************************************************************************************************
+
+  - name: show_cmp_for_existing_user
+    type: function
+    desc: Shows the integrated consent management platform (CMP) flow for existing users.
+
+#*****************************************************************************************************
+
+  - name: has_supported_cmp
+    type: function
+    desc: Checks if a supported consent management platform is integrated.
+    returns:
+    - name: has_supported_cmp
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_tablet
+    type: function
+    desc: Checks if the current device is a tablet.
+    returns:
+    - name: is_tablet
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_user_id
+    type: function
+    desc: Set internal user ID before initializing the SDK.
+    parameters:
+    - name: user_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: set_muted
+    type: function
+    desc: Sets whether ads from certain mediated SDK networks should be muted.
+    parameters:
+    - name: muted
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_muted
+    type: function
+    desc: Checks if ads are set to be muted.
+    returns:
+    - name: isMuted
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_verbose_logging_enabled
+    type: function
+    desc: Enables or disables verbose logging.
+    parameters:
+    - name: enabled
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_verbose_logging_enabled
+    type: function
+    desc: Checks if verbose logging is enabled.
+    returns:
+    - name: is_verbose_logging_enabled
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_creative_debugger_enabled
+    type: function
+    desc: Enables or disables the creative debugger.
+    parameters:
+    - name: enabled
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: set_test_device_advertising_ids
+    type: function
+    desc: Enables devices to receive test ads.
+    parameters:
+    - name: advertising_ids
+      type: array
+      desc: Array of device IDs. IDFA for iOS / GAID for Android
+    - name: count
+      type: number
+      desc: Number of IDs in the array.
+
+#*****************************************************************************************************
+
+  - name: track_event
+    type: function
+    desc: Tracks a custom event.
+    parameters:
+    - name: event
+      type: string
+    - name: parameters
+      type: string
+      desc: JSON string of parameters.
+
+#*****************************************************************************************************
+
+  - name: create_banner
+    type: function
+    desc: Create and load a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: banner_position
+      type: string
+      desc: Possible options are: "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+
+#*****************************************************************************************************
+
+  - name: set_banner_background_color
+    type: function
+    desc: Sets the background color of a banner ad with the Ad Unit ID.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: hex_color_code
+      type: string
+      desc: Supported formats are "#RRGGBB" and "#AARRGGBB".
+
+#*****************************************************************************************************
+
+  - name: set_banner_placement
+    type: function
+    desc: Sets the placement name for a banner ad unit.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: placement
+      type: string
+
+#*****************************************************************************************************
+
+  - name: set_banner_extra_parameter
+    type: function
+    desc: Sets extra parameters for a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: key
+      type: string
+    - name: value
+      type: string
+
+#*****************************************************************************************************
+
+  - name: update_banner_position
+    type: function
+    desc: Updates the position of a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: bannerPosition
+      type: string
+      desc: Possible options are: "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+
+#*****************************************************************************************************
+
+  - name: ShowBanner
+    type: function
+    desc: Displays a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: HideBanner
+    type: function
+    desc: Hides a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: DestroyBanner
+    type: function
+    desc: Destroys a banner ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: CreateMRec
+    type: function
+    desc: Creates an MRec ad with the specified ad unit ID and position.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: mrecPosition
+      type: string
+
+#*****************************************************************************************************
+
+  - name: SetMRecPlacement
+    type: function
+    desc: Sets the placement of an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: placement
+      type: string
+
+#*****************************************************************************************************
+
+  - name: SetMRecExtraParameter
+    type: function
+    desc: Sets extra parameters for an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: key
+      type: string
+    - name: value
+      type: string
+
+#*****************************************************************************************************
+
+  - name: UpdateMRecPosition
+    type: function
+    desc: Updates the position of an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: mrecPosition
+      type: string
+
+#*****************************************************************************************************
+
+  - name: ShowMRec
+    type: function
+    desc: Displays an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: HideMRec
+    type: function
+    desc: Hides an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: DestroyMRec
+    type: function
+    desc: Destroys an MRec ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: LoadInterstitial
+    type: function
+    desc: Loads an interstitial ad for the given ad unit ID.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: ShowInterstitial
+    type: function
+    desc: Shows an interstitial ad for the given ad unit ID.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: IsInterstitialReady
+    type: function
+    desc: Checks if an interstitial ad is ready to be shown.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    returns:
+    - name: isReady
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: LoadRewardedAd
+    type: function
+    desc: Loads a rewarded ad for the given ad unit ID.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: IsRewardedAdReady
+    type: function
+    desc: Checks if a rewarded ad is ready to be shown.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    returns:
+    - name: isReady
+      type: boolean
+
+#*****************************************************************************************************
+
+  - name: ShowRewardedAd
+    type: function
+    desc: Shows a rewarded ad for the given ad unit ID.
+    parameters:
+    - name: ad_unit_id
+      type: string
+
+#*****************************************************************************************************
+
+  - name: SetRewardedAdExtraParameter
+    type: function
+    desc: Sets extra parameters for a rewarded ad.
+    parameters:
+    - name: ad_unit_id
+      type: string
+    - name: key
+      type: string
+    - name: value
+      type: string
