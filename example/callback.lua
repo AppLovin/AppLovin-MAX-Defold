@@ -6,6 +6,9 @@ local M = {}
 local function applovin_callback(self, name, params)
     print(name)
 
+    -- Uncomment the following line to also print the params table.
+    -- print(log.get_table_as_str(params, {}))
+
     if name == "OnSdkInitializedEvent" then
         gui.set_text(gui.get_node("init_status"), "SDK Initiailized")
     end
@@ -23,6 +26,8 @@ local function applovin_callback(self, name, params)
     name == "OnBannerAdLoadFailedEvent" then
         ads.on_ad_load_failed(params)
     end
+
+    -- For the full list of events and respective params, please see the main.gui_script file or the MAX documentations at https://dash.applovin.com/documentation/mediation/defold/getting-started/integration
 end
 
 function M.set()

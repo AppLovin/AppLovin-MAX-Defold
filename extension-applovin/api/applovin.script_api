@@ -15,6 +15,70 @@
 
 #*****************************************************************************************************
 
+  - name: set_callback
+    type: function
+    desc: Sets a callback function for receiving events from the SDK. Call `applovin.set_callback(nil)`
+          to remove callback
+
+    parameters:
+    - name: callback
+      type: function
+      desc: Callback function that is executed on any event in the SDK.
+
+      parameters:
+      - name: self
+        type: object
+        desc: The calling script instance
+
+      - name: name
+        type: string
+        desc: One of the following types of events:
+          "OnSdkInitializedEvent", "OnCmpCompletedEvent",
+          "OnInterstitialAdLoadedEvent", "OnInterstitialAdDisplayedEvent", "OnInterstitialAdHiddenEvent", "OnInterstitialAdClickedEvent", "OnInterstitialAdRevenuePaidEvent", "OnInterstitialAdLoadFailedEvent", "OnInterstitialAdDisplayFailedEvent",
+          "OnRewardedAdLoadedEvent", "OnRewardedAdDisplayedEvent", "OnRewardedAdHiddenEvent", "OnRewardedAdClickedEvent", "OnRewardedAdReceivedRewardEvent", "OnRewardedAdRevenuePaidEvent", "OnRewardedAdLoadFailedEvent", "OnRewardedAdDisplayFailedEvent",
+          "OnBannerAdLoadedEvent", "OnBannerAdClickedEvent", "OnBannerAdExpandedEvent", "OnBannerAdCollapsedEvent", "OnBannerAdRevenuePaidEvent", "OnBannerAdLoadFailedEvent",
+          "OnMRecAdLoadedEvent", "OnMRecAdClickedEvent", "OnMRecAdExpandedEvent", "OnMRecAdCollapsedEvent", "OnMRecAdRevenuePaidEvent", "OnMRecAdLoadFailedEvent"
+
+      - name: params
+        type: table
+        desc: A table holding the data of the event.
+          "OnSdkInitializedEvent": {
+            "countryCode": string, country code for this user
+            "hasUserConsent": boolean, whether the user has provided consent for information sharing
+            "isAgeRestrictedUser": boolean, whether the user is age restricted
+            "isDoNotSell": boolean, whether the user has opted out of the sale of their personal information
+            "isTablet": boolean, whether or not this device is a tablet
+          },
+
+          "OnCmpCompletedEvent": empty table on successful completion OR {
+            "code": int, error code
+            "message": string, error message
+            "cmpCode": int, error code returned by the CMP
+            "cmpMessage": string, error message returned by the CMP
+          }
+
+          Ad loaded, displayed, hidden, clicked, expanded, collapsed, revenue paid event {
+            "adUnitIdentifier": string, ad unit id for which this ad was loaded. Guaranteed not to be null
+            "networkName": string, the ad network for which this ad was loaded from. Guaranteed not to be null
+            "creativeIdentifier": string, the creative id tied to the ad, if any. You can report creative issues to the corresponding ad network using this id
+            "placement": string, the ad placement which was set for this ad. May be null
+            "revenue": double, the ad’s revenue amount. In the case where no revenue amount exists, or it is not available yet, will return a value of 0.
+          }
+
+          "OnRewardedAdReceivedRewardEvent" will receive the following parameters in addition to above parameters {
+            "label": string, currency label
+            "amount": int, reward amount
+          }
+
+          Ad load failed, displayed failed event {
+            "code": int, error code for the error
+            "message": string, error message for the error
+            "waterfall": string, underlying waterfall of ad responses
+            "adUnitIdentifier": string, ad unit id for this ad
+          }
+
+#*****************************************************************************************************
+
   - name: show_mediation_debugger
     type: function
     desc: Displays the Mediation Debugger.
@@ -279,13 +343,13 @@
     parameters:
     - name: ad_unit_id
       type: string
-    - name: bannerPosition
+    - name: banner_position
       type: string
       desc: Possible options are: "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
-  - name: ShowBanner
+  - name: show_banner
     type: function
     desc: Displays a banner ad.
     parameters:
@@ -294,7 +358,7 @@
 
 #*****************************************************************************************************
 
-  - name: HideBanner
+  - name: hide_banner
     type: function
     desc: Hides a banner ad.
     parameters:
@@ -303,7 +367,7 @@
 
 #*****************************************************************************************************
 
-  - name: DestroyBanner
+  - name: destroy_banner
     type: function
     desc: Destroys a banner ad.
     parameters:
@@ -312,20 +376,21 @@
 
 #*****************************************************************************************************
 
-  - name: CreateMRec
+  - name: create_mrec
     type: function
     desc: Creates an MRec ad with the specified ad unit ID and position.
     parameters:
     - name: ad_unit_id
       type: string
-    - name: mrecPosition
+    - name: mrec_position
       type: string
+      desc: Possible options are: "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
-  - name: SetMRecPlacement
+  - name: set_mrec_placement
     type: function
-    desc: Sets the placement of an MRec ad.
+    desc: Sets the placement name for a MRec ad unit.
     parameters:
     - name: ad_unit_id
       type: string
@@ -334,7 +399,7 @@
 
 #*****************************************************************************************************
 
-  - name: SetMRecExtraParameter
+  - name: set_mrec_extra_parameter
     type: function
     desc: Sets extra parameters for an MRec ad.
     parameters:
@@ -347,18 +412,19 @@
 
 #*****************************************************************************************************
 
-  - name: UpdateMRecPosition
+  - name: update_mrec_position
     type: function
     desc: Updates the position of an MRec ad.
     parameters:
     - name: ad_unit_id
       type: string
-    - name: mrecPosition
+    - name: mrec_position
       type: string
+      desc: Possible options are: "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
-  - name: ShowMRec
+  - name: show_mrec
     type: function
     desc: Displays an MRec ad.
     parameters:
@@ -367,7 +433,7 @@
 
 #*****************************************************************************************************
 
-  - name: HideMRec
+  - name: hide_mrec
     type: function
     desc: Hides an MRec ad.
     parameters:
@@ -376,7 +442,7 @@
 
 #*****************************************************************************************************
 
-  - name: DestroyMRec
+  - name: destory_mrec
     type: function
     desc: Destroys an MRec ad.
     parameters:
@@ -385,7 +451,7 @@
 
 #*****************************************************************************************************
 
-  - name: LoadInterstitial
+  - name: load_interstitial
     type: function
     desc: Loads an interstitial ad for the given ad unit ID.
     parameters:
@@ -394,7 +460,7 @@
 
 #*****************************************************************************************************
 
-  - name: ShowInterstitial
+  - name: show_interstitial
     type: function
     desc: Shows an interstitial ad for the given ad unit ID.
     parameters:
@@ -403,19 +469,19 @@
 
 #*****************************************************************************************************
 
-  - name: IsInterstitialReady
+  - name: is_interstitial_ready
     type: function
     desc: Checks if an interstitial ad is ready to be shown.
     parameters:
     - name: ad_unit_id
       type: string
     returns:
-    - name: isReady
+    - name: is_ready
       type: boolean
 
 #*****************************************************************************************************
 
-  - name: LoadRewardedAd
+  - name: load_rewarded_ad
     type: function
     desc: Loads a rewarded ad for the given ad unit ID.
     parameters:
@@ -424,19 +490,19 @@
 
 #*****************************************************************************************************
 
-  - name: IsRewardedAdReady
+  - name: is_rewarded_ad_ready
     type: function
     desc: Checks if a rewarded ad is ready to be shown.
     parameters:
     - name: ad_unit_id
       type: string
     returns:
-    - name: isReady
+    - name: is_ready
       type: boolean
 
 #*****************************************************************************************************
 
-  - name: ShowRewardedAd
+  - name: show_rewarded_ad
     type: function
     desc: Shows a rewarded ad for the given ad unit ID.
     parameters:
@@ -445,7 +511,7 @@
 
 #*****************************************************************************************************
 
-  - name: SetRewardedAdExtraParameter
+  - name: set_rewarded_ad_extra_parameter
     type: function
     desc: Sets extra parameters for a rewarded ad.
     parameters:
@@ -455,3 +521,5 @@
       type: string
     - name: value
       type: string
+
+#*****************************************************************************************************

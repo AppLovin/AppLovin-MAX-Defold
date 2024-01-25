@@ -65,22 +65,7 @@ function setup_ads_page(self, ad_type)
     ads.setup(ad_type)
 end
 
-function init(self)
-    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
-
-    applovin.set_verbose_logging_enabled(true)
-    applovin.set_terms_and_privacy_policy_flow_enabled(true)
-    applovin.set_privacy_policy_url("https://lionstudios.cc/privacy/")
-    applovin.set_terms_of_service_url("https://lionstudios.cc/terms/")
-    applovin.set_consent_flow_debug_user_geography("gdpr")
-    
-    local sysinfo = sys.get_sys_info()
-    if sysinfo.system_name == "Android" then
-        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
-    elseif sysinfo.system_name == "iPhone OS" then
-        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
-    end
-    
+function init(self)    
     self.console = gui.get_node("console")
     self.ui = ui.fill_tree(data, actions)
     
@@ -90,6 +75,28 @@ function init(self)
     msg.post(".", "acquire_input_focus")
 
     callback.set()
+
+    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
+
+    -- AppLovin
+    -- applovin.set_verbose_logging_enabled(true)
+
+    -- Uncomment the following lines to enable MAX Terms and Privacy Policy Flow. 
+    -- Also make sure to add the dependency for the Google UMP SDK in your build.gradle/Podfile, and your Admob ID in AndroidManifest.xml/Info.plist file.
+    -- applovin.set_terms_and_privacy_policy_flow_enabled(true)
+    -- applovin.set_privacy_policy_url("YOUR_PRIVACY_POLICY_URL")
+    -- applovin.set_terms_of_service_url("YOUR_TERMS_OF_SERVICE_URL")
+
+    -- Uncomment one of the following lines to test MAX Terms and Privacy Policy Flow in a GDPR/non-GDPR region
+    -- applovin.set_consent_flow_debug_user_geography("gdpr")
+    -- applovin.set_consent_flow_debug_user_geography("other")
+
+    local sysinfo = sys.get_sys_info()
+    if sysinfo.system_name == "Android" then
+        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
+    elseif sysinfo.system_name == "iPhone OS" then
+        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
+    end
 end
 
 function update(self, dt)

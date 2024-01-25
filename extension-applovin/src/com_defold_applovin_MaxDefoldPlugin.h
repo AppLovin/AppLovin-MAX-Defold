@@ -3,8 +3,8 @@
 #include <jni.h>
 /* Header for class com_defold_applovin_MaxDefoldPlugin */
 
-#ifndef COM_DEFOLD_APPLOVIN_MaxDefoldPlugin_H
-#define COM_DEFOLD_APPLOVIN_MaxDefoldPlugin_H
+#ifndef COM_DEFOLD_APPLOVIN_MAXDEFOLDPLUGIN_H
+#define COM_DEFOLD_APPLOVIN_MAXDEFOLDPLUGIN_H
 #ifdef __cplusplus
 extern "C" {
 #endif
