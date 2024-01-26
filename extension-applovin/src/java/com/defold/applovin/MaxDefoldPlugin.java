@@ -90,8 +90,8 @@ public class MaxDefoldPlugin
     private final List<String>             mAdUnitIdsToShowAfterCreate = new ArrayList<>( 2 );
 
     private final WeakReference<Activity> gameActivity;
-    private final String engineVersion;
-    private final String pluginVersion;
+    private final String                  engineVersion;
+    private final String                  pluginVersion;
 
     private Activity getGameActivity() { return gameActivity.get(); }
 
@@ -563,7 +563,7 @@ public class MaxDefoldPlugin
     {
         destroyAdView( adUnitId, MaxAdFormat.MREC );
     }
-//    // endregion
+    // endregion
 
     // region Interstitials
     public void loadInterstitial(final String adUnitId)
@@ -589,9 +589,9 @@ public class MaxDefoldPlugin
         MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
         interstitial.setExtraParameter( key, value );
     }
-//     endregion
+    //     endregion
 
-//     region Rewarded
+    //     region Rewarded
     public void loadRewardedAd(final String adUnitId)
     {
         MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
@@ -894,15 +894,19 @@ public class MaxDefoldPlugin
                     return;
                 }
 
-                adView.setVisibility( View.GONE );
-
                 if ( adView.getParent() == null )
                 {
                     final Activity currentActivity = getGameActivity();
                     final RelativeLayout relativeLayout = new RelativeLayout( currentActivity );
-                    currentActivity.addContentView( relativeLayout, new LinearLayout.LayoutParams( LinearLayout.LayoutParams.MATCH_PARENT,
-                                                                                                   LinearLayout.LayoutParams.MATCH_PARENT ) );
+                    relativeLayout.setVisibility( View.GONE );
                     relativeLayout.addView( adView );
+
+                    WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+                    layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+                    layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+                    layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+
+                    currentActivity.getWindowManager().addView( relativeLayout, layoutParams );
 
                     // Position ad view immediately so if publisher sets color before ad loads, it will not be the size of the screen
                     mAdViewAdFormats.put( adUnitId, adFormat );
@@ -988,7 +992,8 @@ public class MaxDefoldPlugin
                     return;
                 }
 
-                adView.setVisibility( View.VISIBLE );
+                RelativeLayout relativeLayout = (RelativeLayout) adView.getParent();
+                relativeLayout.setVisibility( View.VISIBLE );
                 adView.startAutoRefresh();
             }
         } );
@@ -1036,7 +1041,7 @@ public class MaxDefoldPlugin
                 final ViewParent parent = adView.getParent();
                 if ( parent instanceof ViewGroup )
                 {
-                    ( (ViewGroup) parent ).removeView( adView );
+                    getGameActivity().getWindowManager().removeView( (View) parent );
                 }
 
                 adView.setListener( null );
@@ -1288,7 +1293,7 @@ public class MaxDefoldPlugin
                          *                  +---+-----------+
                          */
                         final Rect windowRect = new Rect();
-                        relativeLayout.getWindowVisibleDisplayFrame( windowRect );
+                        getGameActivity().getWindow().getDecorView().getWindowVisibleDisplayFrame( windowRect );
 
                         final int windowWidth = windowRect.width();
                         final int windowHeight = windowRect.height();
@@ -1325,7 +1330,9 @@ public class MaxDefoldPlugin
             }
         }
 
-        relativeLayout.setGravity( gravity );
+        WindowManager.LayoutParams layoutParams = (WindowManager.LayoutParams) relativeLayout.getLayoutParams();
+        layoutParams.gravity = gravity;
+        getGameActivity().getWindowManager().updateViewLayout( relativeLayout, layoutParams );
     }
     // endregion
 
