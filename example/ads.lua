@@ -3,11 +3,18 @@ local log = require("example.log")
 
 local M = {}
 
-local ad_units = { 
-	Interstitial = "YOUR_INTER_AD_UNIT",
-	Rewarded = "YOUR_REWARDED_AD_UNIT",
-	Banner = "YOUR_BANNER_AD_UNIT",
-	MRec = "YOUR_MREC_AD_UNIT"
+local ios_ad_units = { 
+	Interstitial_ = "ENTER_IOS_INTERSTITIAL_AD_UNIT_ID_HERE",
+	Rewarded = "ENTER_IOS_REWARDED_AD_UNIT_ID_HERE",
+	Banner = "ENTER_IOS_BANNER_AD_UNIT_ID_HERE",
+	MRec = "ENTER_ANDROID_MREC_AD_UNIT_ID_HERE"
+}
+
+local android_ad_units = {
+	Interstitial = "ENTER_ANDROID_INTERSTITIAL_AD_UNIT_ID_HERE",
+	Rewarded = "ENTER_ANDROID_REWARDED_AD_UNIT_ID_HERE",
+	Banner = "ENTER_ANDROID_BANNER_AD_UNIT_ID_HERE",
+	MRec = "ENTER_ANDROID_MREC_AD_UNIT_ID_HERE"
 }
 
 local ui_components = {}
@@ -59,7 +66,13 @@ function M.setup(ad_type)
 	reset_ui_components()
 	
 	selected_ad_type = ad_type
-	ad_unit = ad_units[ad_type]
+
+	local sysinfo = sys.get_sys_info()
+	if sysinfo.system_name == "Android" then
+		ad_unit = android_ad_units[ad_type]
+	elseif sysinfo.system_name == "iPhone OS" then
+		ad_unit = ios_ad_units[ad_type]
+	end
 	
 	gui.set_text(ui_components.ad_type_text, ad_type)
 end
@@ -77,7 +90,7 @@ function M.load_button_clicked()
 end
 
 function M.on_ad_loaded(params)
-	if params.adUnitIdentifier == ad_unit then
+	if not isShowingAd and params.adUnitIdentifier == ad_unit then
 		gui.set_text(ui_components.load_button_label, "Show")
 		gui.set_enabled(ui_components.load_button, true)
 		gui.set_enabled(ui_components.loading_text, false)
@@ -85,13 +98,13 @@ function M.on_ad_loaded(params)
 end
 
 function M.destroy_current_ad()
-	if isShowingAd then
-		if selected_ad_type == "MRec" then
-			applovin.destroy_mrec(ad_unit)
-		elseif selected_ad_type == "Banner" then
-			applovin.destroy_banner(ad_unit)
-		end
+	if selected_ad_type == "MRec" then
+		applovin.destroy_mrec(ad_unit)
+	elseif selected_ad_type == "Banner" then
+		applovin.destroy_banner(ad_unit)
 	end
+
+	isShowingAd = false
 end
 
 return M

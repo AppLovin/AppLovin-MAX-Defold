@@ -7,10 +7,10 @@ local function applovin_callback(self, name, params)
     print(name)
 
     -- Uncomment the following line to also print the params table.
-    -- print(log.get_table_as_str(params, {}))
+    -- print(log.get_table_as_str(params))
 
     if name == "OnSdkInitializedEvent" then
-        gui.set_text(gui.get_node("init_status"), "SDK Initiailized")
+        gui.set_text(gui.get_node("init_status"), "SDK initialized in " .. params["countryCode"])
     end
     
     if name == "OnInterstitialAdLoadedEvent" or

@@ -42,46 +42,13 @@ function M.update(node)
     gui.set_text(node, text)
 end
 
-local all_msgs = {}
-local all_events = {}
-
-local function save_const(key, value)
-    if string.find(key, "EVENT") then
-        all_events[value] = key
-    elseif string.find(key, "MSG") then
-        all_msgs[value] = key
-    end
-end
-
-function M.msg(const)
-    return all_msgs[const]
-end
-
-function M.event(const)
-    return all_events[const]
-end
-
-local function is_ignore(key, ignore)
-    if not ignore then 
-        return false
-    end
-    for k, v in pairs(ignore) do
-        if key == v then
-            return true
-        end
-    end
-    return false
-end
-
-function M.get_table_as_str(table, ignore)
+function M.get_table_as_str(table)
     if not table then
         return nil
     end
     local result = ""
     for k, v in pairs(table) do
-        if not is_ignore(k, ignore) then
-            result = result..tostring(k)..":"..tostring(v)..", "
-        end
+        result = result..tostring(k)..":"..tostring(v)..", "
     end
     if result ~= "" then
         return result

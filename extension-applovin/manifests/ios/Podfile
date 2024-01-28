@@ -5,5 +5,4 @@ source 'https://cdn.cocoapods.org/'
 # Settings
 inhibit_all_warnings!
 
-pod 'AppLovinSDK'
-pod 'Google-Mobile-Ads-SDK'
+pod 'AppLovinSDK', '12.1.0'

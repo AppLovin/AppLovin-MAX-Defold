@@ -9,6 +9,8 @@ local ads = require("example.ads")
 local callback = require("example.callback")
 local dirtylarry = require("dirtylarry.dirtylarry")
 
+local SDK_KEY = "YOUR_SDK_KEY_HERE"
+
 local data = {
     ["main_page"] = { type = "page",
         ["mediation_debugger"] = {},
@@ -30,7 +32,7 @@ actions.back = function(self, el)
     
     ui.disable_all(self.ui, "page")
     ui.enable(self.ui.main_page, true)
-    ui.enable(self.ui.back, false)    
+    ui.enable(self.ui.back, false)
 end
 
 actions.mediation_debugger = function(self, el)
@@ -78,25 +80,12 @@ function init(self)
 
     gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
 
-    -- AppLovin
-    -- applovin.set_verbose_logging_enabled(true)
+    -- MAX Consent Flow - https://dash.applovin.com/documentation/mediation/defold/getting-started/terms-and-privacy-policy-flow
+    applovin.set_terms_and_privacy_policy_flow_enabled(true)
+    applovin.set_privacy_policy_url("https://your_company_name.com/privacy/") -- mandatory
+    applovin.set_terms_of_service_url("https://your_company_name.com/terms/") -- optional
 
-    -- Uncomment the following lines to enable MAX Terms and Privacy Policy Flow. 
-    -- Also make sure to add the dependency for the Google UMP SDK in your build.gradle/Podfile, and your Admob ID in AndroidManifest.xml/Info.plist file.
-    -- applovin.set_terms_and_privacy_policy_flow_enabled(true)
-    -- applovin.set_privacy_policy_url("YOUR_PRIVACY_POLICY_URL")
-    -- applovin.set_terms_of_service_url("YOUR_TERMS_OF_SERVICE_URL")
-
-    -- Uncomment one of the following lines to test MAX Terms and Privacy Policy Flow in a GDPR/non-GDPR region
-    -- applovin.set_consent_flow_debug_user_geography("gdpr")
-    -- applovin.set_consent_flow_debug_user_geography("other")
-
-    local sysinfo = sys.get_sys_info()
-    if sysinfo.system_name == "Android" then
-        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
-    elseif sysinfo.system_name == "iPhone OS" then
-        applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
-    end
+    applovin.initialize(SDK_KEY)
 end
 
 function update(self, dt)
