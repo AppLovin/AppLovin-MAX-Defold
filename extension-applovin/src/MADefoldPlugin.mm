@@ -88,8 +88,6 @@ static NSString *const TAG = @"MADefoldPlugin";
         self.defoldMainView = mainView;
         
         dispatchOnMainQueue(^{
-
-            
             self.safeAreaBackground = [[UIView alloc] init];
             self.safeAreaBackground.hidden = YES;
             self.safeAreaBackground.backgroundColor = UIColor.clearColor;
