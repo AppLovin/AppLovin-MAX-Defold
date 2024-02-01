@@ -210,7 +210,6 @@ static NSString *const TAG = @"MADefoldPlugin";
     message[@"isTablet"] = @([self isTablet]);
     
     return message;
-
 }
 
 #pragma mark - Privacy

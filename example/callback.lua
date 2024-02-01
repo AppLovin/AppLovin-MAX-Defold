@@ -15,15 +15,15 @@ local function applovin_callback(self, name, params)
     
     if name == "OnInterstitialAdLoadedEvent" or
     name == "OnRewardedAdLoadedEvent" or
-    name == "OnMRecAdLoadedEvent" or
-    name == "OnBannerAdLoadedEvent" then
+    name == "OnBannerAdLoadedEvent" or
+    name == "OnMRecAdLoadedEvent" then
         ads.on_ad_loaded(params)
     end
 
     if name == "OnInterstitialAdLoadFailedEvent" or
     name == "OnRewardedAdLoadFailedEvent" or
-    name == "OnMRecAdLoadFailedEvent" or
-    name == "OnBannerAdLoadFailedEvent" then
+    name == "OnBannerAdLoadFailedEvent" or
+    name == "OnMRecAdLoadFailedEvent" then
         ads.on_ad_load_failed(params)
     end
 

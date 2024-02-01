@@ -16,8 +16,8 @@ local data = {
         ["mediation_debugger"] = {},
         ["interstitial"] = {},
         ["rewarded"] = {},
-        ["mrec"] = {},
         ["banner"] = {},
+        ["mrec"] = {},
     },
     ["ads_page"] = { type = "page",
         ["back"] = {},
@@ -47,12 +47,12 @@ actions.rewarded = function(self, el)
     setup_ads_page(self, "Rewarded")
 end
 
-actions.mrec = function(self, el)
-    setup_ads_page(self, "MRec")
-end
-
 actions.banner = function(self, el)
     setup_ads_page(self, "Banner")
+end
+
+actions.mrec = function(self, el)
+    setup_ads_page(self, "MRec")
 end
 
 actions.load = function(self, el)
