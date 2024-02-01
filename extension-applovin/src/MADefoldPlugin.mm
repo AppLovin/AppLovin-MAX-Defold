@@ -42,11 +42,12 @@
 @property (nonatomic, strong, nullable) NSArray<NSString *> *testDeviceIdentifiersToSet;
 @property (nonatomic, strong, nullable) NSNumber *verboseLoggingEnabledToSet;
 @property (nonatomic, strong, nullable) NSNumber *creativeDebuggerEnabledToSet;
+@property (nonatomic, strong, nullable) NSNumber *mutedToSet;
 
 @property (nonatomic, strong, nullable) NSNumber *termsAndPrivacyPolicyFlowEnabledToSet;
 @property (nonatomic, strong, nullable) NSURL *privacyPolicyURLToSet;
 @property (nonatomic, strong, nullable) NSURL *termsOfServiceURLToSet;
-@property (nonatomic, strong, nullable) NSString *userGeographyStringToSet;
+@property (nonatomic, strong, nullable) NSString *debugUserGeographyToSet;
 
 // Fullscreen Ad Fields
 @property (nonatomic, strong) NSMutableDictionary<NSString *, MAInterstitialAd *> *interstitials;
@@ -55,7 +56,6 @@
 // Banner Fields
 @property (nonatomic, strong) NSMutableDictionary<NSString *, MAAdView *> *adViews;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, MAAdFormat *> *adViewAdFormats;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, MAAdFormat *> *verticalAdViewFormats;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *adViewPositions;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSArray<NSLayoutConstraint *> *> *adViewConstraints;
 @property (nonatomic, strong) NSMutableArray<NSString *> *adUnitIdentifiersToShowAfterCreate;
@@ -81,35 +81,25 @@ static NSString *const TAG = @"MADefoldPlugin";
         self.rewardedAds = [NSMutableDictionary dictionaryWithCapacity: 2];
         self.adViews = [NSMutableDictionary dictionaryWithCapacity: 2];
         self.adViewAdFormats = [NSMutableDictionary dictionaryWithCapacity: 2];
-        self.verticalAdViewFormats = [NSMutableDictionary dictionaryWithCapacity: 2];
         self.adViewPositions = [NSMutableDictionary dictionaryWithCapacity: 2];
         self.adViewConstraints = [NSMutableDictionary dictionaryWithCapacity: 2];
         self.adUnitIdentifiersToShowAfterCreate = [NSMutableArray arrayWithCapacity: 2];
         self.defoldMainView = mainView;
-        
-        dispatchOnMainQueue(^{
-            self.safeAreaBackground = [[UIView alloc] init];
-            self.safeAreaBackground.hidden = YES;
-            self.safeAreaBackground.backgroundColor = UIColor.clearColor;
-            self.safeAreaBackground.translatesAutoresizingMaskIntoConstraints = NO;
-            self.safeAreaBackground.userInteractionEnabled = NO;
-            
-            [self.defoldMainView addSubview: self.safeAreaBackground];
-        });
-        
-        // Enable orientation change listener, so that the position can be updated for vertical banners.
-        [[NSNotificationCenter defaultCenter] addObserverForName: UIDeviceOrientationDidChangeNotification
-                                                          object: nil
-                                                           queue: [NSOperationQueue mainQueue]
-                                                      usingBlock:^(NSNotification *notification) {
-            
-            for ( NSString *adUnitIdentifier in self.verticalAdViewFormats )
-            {
-                [self positionAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: self.verticalAdViewFormats[adUnitIdentifier]];
-            }
-        }];
+
+        self.safeAreaBackground = [[UIView alloc] init];
+        self.safeAreaBackground.hidden = YES;
+        self.safeAreaBackground.backgroundColor = UIColor.clearColor;
+        self.safeAreaBackground.translatesAutoresizingMaskIntoConstraints = NO;
+        self.safeAreaBackground.userInteractionEnabled = NO;
+
+        [self.defoldMainView addSubview: self.safeAreaBackground];
     }
     return self;
+}
+
+- (BOOL)isInitialized
+{
+    return [self isPluginInitialized] && [self isSDKInitialized];
 }
 
 - (void)initialize:(NSString *)pluginVersion sdkKey:(NSString *)sdkKey
@@ -138,67 +128,68 @@ static NSString *const TAG = @"MADefoldPlugin";
                         format: @"Unable to initialize AppLovin SDK - no SDK key provided and not found in Info.plist!"];
         }
     }
+
+    ALSdkSettings *settings = [[ALSdkSettings alloc] init];
+
+    if ( self.testDeviceIdentifiersToSet )
+    {
+        settings.testDeviceAdvertisingIdentifiers = self.testDeviceIdentifiersToSet;
+        self.testDeviceIdentifiersToSet = nil;
+    }
+
+    if ( self.verboseLoggingEnabledToSet )
+    {
+        settings.verboseLoggingEnabled = self.verboseLoggingEnabledToSet.boolValue;
+        self.verboseLoggingEnabledToSet = nil;
+    }
     
+    if ( self.creativeDebuggerEnabledToSet )
+    {
+        settings.creativeDebuggerEnabled = self.creativeDebuggerEnabledToSet.boolValue;
+        self.creativeDebuggerEnabledToSet = nil;
+    }
+
+    if ( self.termsAndPrivacyPolicyFlowEnabledToSet )
+    {
+        settings.termsAndPrivacyPolicyFlowSettings.enabled = self.termsAndPrivacyPolicyFlowEnabledToSet.boolValue;
+        self.termsAndPrivacyPolicyFlowEnabledToSet = nil;
+    }
+
+    if ( self.privacyPolicyURLToSet )
+    {
+        settings.termsAndPrivacyPolicyFlowSettings.privacyPolicyURL = self.privacyPolicyURLToSet;
+        self.privacyPolicyURLToSet = nil;
+    }
+
+    if ( self.termsOfServiceURLToSet )
+    {
+        settings.termsAndPrivacyPolicyFlowSettings.termsOfServiceURL = self.termsOfServiceURLToSet;
+        self.termsOfServiceURLToSet = nil;
+    }
+
+    if ( self.debugUserGeographyToSet )
+    {
+        settings.termsAndPrivacyPolicyFlowSettings.debugUserGeography = [self toAppLovinConsentFlowUserGeography: self.debugUserGeographyToSet];
+        self.debugUserGeographyToSet = nil;
+    }
+
     // Initialize SDK
-    self.sdk = [ALSdk sharedWithKey: sdkKey];
+    self.sdk = [ALSdk sharedWithKey: sdkKey settings: settings];
     [self.sdk setPluginVersion: [@"Defold-" stringByAppendingString: pluginVersion]];
     [self.sdk setMediationProvider: ALMediationProviderMAX];
-    
-    // Update SDK setttings
+
     if ( [self.userIdentifierToSet al_isValidString] )
     {
         self.sdk.userIdentifier = self.userIdentifierToSet;
         self.userIdentifierToSet = nil;
     }
 
-    if ( self.testDeviceIdentifiersToSet )
-    {
-        self.sdk.settings.testDeviceAdvertisingIdentifiers = self.testDeviceIdentifiersToSet;
-        self.testDeviceIdentifiersToSet = nil;
-    }
-
-    if ( self.verboseLoggingEnabledToSet )
-    {
-        self.sdk.settings.verboseLoggingEnabled = self.verboseLoggingEnabledToSet.boolValue;
-        self.verboseLoggingEnabledToSet = nil;
-    }
-    
-    if ( self.creativeDebuggerEnabledToSet )
-    {
-        self.sdk.settings.creativeDebuggerEnabled = self.creativeDebuggerEnabledToSet.boolValue;
-        self.creativeDebuggerEnabledToSet = nil;
-    }
-
-    if ( self.termsAndPrivacyPolicyFlowEnabledToSet )
-        {
-            self.sdk.settings.termsAndPrivacyPolicyFlowSettings.enabled = self.termsAndPrivacyPolicyFlowEnabledToSet.boolValue;
-            self.termsAndPrivacyPolicyFlowEnabledToSet = nil;
-        }
-
-    if ( self.privacyPolicyURLToSet )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.privacyPolicyURL = self.privacyPolicyURLToSet;
-        self.privacyPolicyURLToSet = nil;
-    }
-
-    if ( self.termsOfServiceURLToSet )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.termsOfServiceURL = self.termsOfServiceURLToSet;
-        self.termsOfServiceURLToSet = nil;
-    }
-
-    if ( [self.userGeographyStringToSet al_isValidString] )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.debugUserGeography = [self userGeographyForString: self.userGeographyStringToSet];
-        self.userGeographyStringToSet = nil;
-    }
-    
     [self.sdk initializeSdkWithCompletionHandler:^(ALSdkConfiguration *configuration) {
         [self log: @"SDK initialized"];
-        
+
         self.sdkConfiguration = configuration;
         self.sdkInitialized = YES;
-        
+
         [self sendDefoldEventWithName: @"OnSdkInitializedEvent" parameters: [self initializationMessage]];
     }];
 }
@@ -209,9 +200,7 @@ static NSString *const TAG = @"MADefoldPlugin";
     
     if ( self.sdkConfiguration )
     {
-        // Defold blueprints only support uint8 enums. Since ALAppTrackingTransparencyStatusUnavailable = -1,
-        // increment app tracking status values by 1 to make them all unsigned
-        message[@"appTrackingStatus"] = @(self.sdkConfiguration.appTrackingTransparencyStatus + 1);
+        message[@"appTrackingStatus"] = @(self.sdkConfiguration.appTrackingTransparencyStatus);
         message[@"countryCode"] = self.sdkConfiguration.countryCode;
     }
     
@@ -222,11 +211,6 @@ static NSString *const TAG = @"MADefoldPlugin";
     
     return message;
 
-}
-
-- (BOOL)isInitialized
-{
-    return [self isPluginInitialized] && [self isSDKInitialized];
 }
 
 #pragma mark - Privacy
@@ -265,54 +249,22 @@ static NSString *const TAG = @"MADefoldPlugin";
 
 - (void)setTermsAndPrivacyPolicyFlowEnabled:(BOOL)enabled
 {
-    if ( [self isPluginInitialized] )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.enabled = enabled;
-        self.termsAndPrivacyPolicyFlowEnabledToSet = nil;
-    }
-    else
-    {
-        self.termsAndPrivacyPolicyFlowEnabledToSet = @(enabled);
-    }
+    self.termsAndPrivacyPolicyFlowEnabledToSet = @(enabled);
 }
 
 - (void)setPrivacyPolicyURL:(NSString *)urlString
 {
-    if ( [self isPluginInitialized] )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.privacyPolicyURL = [NSURL URLWithString: urlString];
-        self.privacyPolicyURLToSet = nil;
-    }
-    else
-    {
-        self.privacyPolicyURLToSet = [NSURL URLWithString: urlString];
-    }
+    self.privacyPolicyURLToSet = [NSURL URLWithString: urlString];
 }
 
 - (void)setTermsOfServiceURL:(NSString *)urlString
 {
-    if ( [self isPluginInitialized] )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.termsOfServiceURL = [NSURL URLWithString: urlString];
-        self.termsOfServiceURLToSet = nil;
-    }
-    else
-    {
-        self.termsOfServiceURLToSet = [NSURL URLWithString: urlString];
-    }
+    self.termsOfServiceURLToSet = [NSURL URLWithString: urlString];
 }
 
-- (void)setConsentFlowDebugUserGeography:(NSString *)userGeographyString
+- (void)setConsentFlowDebugUserGeography:(NSString *)userGeography
 {
-    if ( [self isPluginInitialized] )
-    {
-        self.sdk.settings.termsAndPrivacyPolicyFlowSettings.debugUserGeography = [self userGeographyForString: userGeographyString];
-        self.userGeographyStringToSet = nil;
-    }
-    else
-    {
-        self.userGeographyStringToSet = userGeographyString;
-    }
+    self.debugUserGeographyToSet = userGeography;
 }
 
 - (void)showCMPForExistingUser
@@ -325,7 +277,7 @@ static NSString *const TAG = @"MADefoldPlugin";
             {
                 parameters = @{@"code" : @(error.code),
                                @"message" : error.message ?: @"",
-                               @"cmpCode" : @(error.cmpCode) ?: @(-1),
+                               @"cmpCode" : @(error.cmpCode),
                                @"cmpMessage" : error.cmpMessage ?: @""};
             }
 
@@ -374,9 +326,15 @@ static NSString *const TAG = @"MADefoldPlugin";
 
 - (void)setMuted:(BOOL)muted
 {
-    if ( ![self isPluginInitialized] ) return;
-    
-    self.sdk.settings.muted = muted;
+    if ( [self isPluginInitialized] )
+    {
+        self.sdk.settings.muted = muted;
+        self.mutedToSet = nil;
+    }
+    else
+    {
+        self.mutedToSet = @(muted);
+    }
 }
 
 - (BOOL)isMuted
@@ -401,7 +359,7 @@ static NSString *const TAG = @"MADefoldPlugin";
 
 - (BOOL)isVerboseLoggingEnabled
 {
-    if ( self.sdk )
+    if ( [self isPluginInitialized] )
     {
         return [self.sdk.settings isVerboseLoggingEnabled];
     }
@@ -447,11 +405,63 @@ static NSString *const TAG = @"MADefoldPlugin";
     [self.sdk.eventService trackEvent: event parameters: parameters];
 }
 
+#pragma mark - Interstitials
+
+- (void)loadInterstitialForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
+    [interstitial loadAd];
+}
+
+- (BOOL)isInterstitialReadyForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
+    return [interstitial isReady];
+}
+
+- (void)showInterstitialForAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement
+{
+    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
+    [interstitial showAdForPlacement: placement];
+}
+
+- (void)setInterstitialExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(NSString *)value
+{
+    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
+    [interstitial setExtraParameterForKey: key value: value];
+}
+
+#pragma mark - Rewarded
+
+- (void)loadRewardedAdForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
+    [rewardedAd loadAd];
+}
+
+- (BOOL)isRewardedAdReadyForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
+    return [rewardedAd isReady];
+}
+
+- (void)showRewardedAdForAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement
+{
+    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
+    [rewardedAd showAdForPlacement: placement];
+}
+
+- (void)setRewardedAdExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value
+{
+    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
+    [rewardedAd setExtraParameterForKey: key value: value];
+}
+
 #pragma mark - Banners
 
-- (void)createBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)bannerPosition
+- (void)createBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)bannerPosition
 {
-    [self createAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT atPosition: bannerPosition];
+    [self createAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT atPosition: bannerPosition];
 }
 
 - (void)setBannerBackgroundColorForAdUnitIdentifier:(NSString *)adUnitIdentifier hexColorCode:(NSString *)hexColorCode
@@ -474,26 +484,26 @@ static NSString *const TAG = @"MADefoldPlugin";
     [self updateAdViewPosition: bannerPosition forAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
 }
 
-- (void)showBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)showBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self showAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
+    [self showAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
 }
 
-- (void)hideBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)hideBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self hideAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
+    [self hideAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
 }
 
-- (void)destroyBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)destroyBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self destroyAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
+    [self destroyAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
 }
 
 #pragma mark - MRECs
 
-- (void)createMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)mrecPosition
+- (void)createMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)mrecPosition
 {
-    [self createAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec atPosition: mrecPosition];
+    [self createAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec atPosition: mrecPosition];
 }
 
 - (void)setMRecPlacement:(nullable NSString *)placement forAdUnitIdentifier:(NSString *)adUnitIdentifier
@@ -511,71 +521,19 @@ static NSString *const TAG = @"MADefoldPlugin";
     [self updateAdViewPosition: mrecPosition forAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
 }
 
-- (void)showMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)showMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self showAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
+    [self showAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
 }
 
-- (void)hideMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)hideMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self hideAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
+    [self hideAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
 }
 
-- (void)destroyMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier
+- (void)destroyMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
-    [self destroyAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
-}
-
-#pragma mark - Interstitials
-
-- (void)loadInterstitialWithAdUnitIdentifier:(NSString *)adUnitIdentifier
-{
-    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
-    [interstitial loadAd];
-}
-
-- (BOOL)isInterstitialReadyWithAdUnitIdentifier:(NSString *)adUnitIdentifier
-{
-    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
-    return [interstitial isReady];
-}
-
-- (void)showInterstitialWithAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement
-{
-    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
-    [interstitial showAdForPlacement: placement];
-}
-
-- (void)setInterstitialExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(NSString *)value
-{
-    MAInterstitialAd *interstitial = [self retrieveInterstitialForAdUnitIdentifier: adUnitIdentifier];
-    [interstitial setExtraParameterForKey: key value: value];
-}
-
-#pragma mark - Rewarded
-
-- (void)loadRewardedAdWithAdUnitIdentifier:(NSString *)adUnitIdentifier
-{
-    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
-    [rewardedAd loadAd];
-}
-
-- (BOOL)isRewardedAdReadyWithAdUnitIdentifier:(NSString *)adUnitIdentifier
-{
-    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
-    return [rewardedAd isReady];
-}
-
-- (void)showRewardedAdWithAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement
-{
-    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
-    [rewardedAd showAdForPlacement: placement];
-}
-
-- (void)setRewardedAdExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value
-{
-    MARewardedAd *rewardedAd = [self retrieveRewardedAdForAdUnitIdentifier: adUnitIdentifier];
-    [rewardedAd setExtraParameterForKey: key value: value];
+    [self destroyAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
 }
 
 #pragma mark - Ad Callbacks
@@ -584,7 +542,7 @@ static NSString *const TAG = @"MADefoldPlugin";
 {
     NSString *name;
     MAAdFormat *adFormat = ad.format;
-    if ( MAAdFormat.banner == adFormat || MAAdFormat.leader == adFormat || MAAdFormat.mrec == adFormat )
+    if ( [adFormat isAdViewAd] )
     {
         MAAdView *adView = [self retrieveAdViewForAdUnitIdentifier: ad.adUnitIdentifier adFormat: adFormat];
         // An ad is now being shown, enable user interaction.
@@ -594,7 +552,7 @@ static NSString *const TAG = @"MADefoldPlugin";
         [self positionAdViewForAd: ad];
         
         // Do not auto-refresh by default if the ad view is not showing yet (e.g. first load during app launch and publisher does not automatically show banner upon load success)
-        // We will resume auto-refresh in -[MADefoldPlugin showBannerWithAdUnitIdentifier:].
+        // We will resume auto-refresh in -[MADefoldPlugin showBannerForAdUnitIdentifier:].
         if ( adView && [adView isHidden] )
         {
             [adView stopAutoRefresh];
@@ -742,7 +700,7 @@ static NSString *const TAG = @"MADefoldPlugin";
 - (void)didExpandAd:(MAAd *)ad
 {
     MAAdFormat *adFormat = ad.format;
-    if ( adFormat != MAAdFormat.banner && adFormat != MAAdFormat.leader && adFormat != MAAdFormat.mrec )
+    if ( ![adFormat isAdViewAd] )
     {
         [self logInvalidAdFormat: adFormat];
         return;
@@ -755,7 +713,7 @@ static NSString *const TAG = @"MADefoldPlugin";
 - (void)didCollapseAd:(MAAd *)ad
 {
     MAAdFormat *adFormat = ad.format;
-    if ( adFormat != MAAdFormat.banner && adFormat != MAAdFormat.leader && adFormat != MAAdFormat.mrec )
+    if ( ![adFormat isAdViewAd] )
     {
         [self logInvalidAdFormat: adFormat];
         return;
@@ -812,7 +770,7 @@ static NSString *const TAG = @"MADefoldPlugin";
 
 #pragma mark - Internal Methods
 
-- (void)createAdViewWithAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat atPosition:(NSString *)adViewPosition
+- (void)createAdViewForAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat atPosition:(NSString *)adViewPosition
 {
     dispatchOnMainQueue(^{
         [self log: @"Creating %@ with ad unit identifier \"%@\" and position: \"%@\"", adFormat, adUnitIdentifier, adViewPosition];
@@ -831,7 +789,7 @@ static NSString *const TAG = @"MADefoldPlugin";
         // The publisher may have requested to show the banner before it was created. Now that the banner is created, show it.
         if ( [self.adUnitIdentifiersToShowAfterCreate containsObject: adUnitIdentifier] )
         {
-            [self showAdViewWithAdUnitIdentifier: adUnitIdentifier adFormat: adFormat];
+            [self showAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: adFormat];
             [self.adUnitIdentifiersToShowAfterCreate removeObject: adUnitIdentifier];
         }
     });
@@ -903,7 +861,7 @@ static NSString *const TAG = @"MADefoldPlugin";
     });
 }
 
-- (void)showAdViewWithAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
+- (void)showAdViewForAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
 {
     dispatchOnMainQueue(^{
         [self log: @"Showing %@ with ad unit identifier \"%@\"", adFormat, adUnitIdentifier];
@@ -924,7 +882,7 @@ static NSString *const TAG = @"MADefoldPlugin";
     });
 }
 
-- (void)hideAdViewWithAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
+- (void)hideAdViewForAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
 {
     dispatchOnMainQueue(^{
         [self log: @"Hiding %@ with ad unit identifier \"%@\"", adFormat, adUnitIdentifier];
@@ -938,7 +896,7 @@ static NSString *const TAG = @"MADefoldPlugin";
     });
 }
 
-- (void)destroyAdViewWithAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
+- (void)destroyAdViewForAdUnitIdentifier:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
 {
     dispatchOnMainQueue(^{
         [self log: @"Destroying %@ with ad unit identifier \"%@\"", adFormat, adUnitIdentifier];
@@ -951,7 +909,6 @@ static NSString *const TAG = @"MADefoldPlugin";
         [self.adViews removeObjectForKey: adUnitIdentifier];
         [self.adViewPositions removeObjectForKey: adUnitIdentifier];
         [self.adViewAdFormats removeObjectForKey: adUnitIdentifier];
-        [self.verticalAdViewFormats removeObjectForKey: adUnitIdentifier];
     });
 }
 
@@ -1039,7 +996,6 @@ static NSString *const TAG = @"MADefoldPlugin";
     NSArray<NSLayoutConstraint *> *activeConstraints = self.adViewConstraints[adUnitIdentifier];
     [NSLayoutConstraint deactivateConstraints: activeConstraints];
     adView.transform = CGAffineTransformIdentity;
-    [self.verticalAdViewFormats removeObjectForKey: adUnitIdentifier];
     
     // Ensure superview contains the safe area background.
     if ( ![superview.subviews containsObject: self.safeAreaBackground] )
@@ -1102,92 +1058,6 @@ static NSString *const TAG = @"MADefoldPlugin";
             {
                 [constraints addObject: [adView.bottomAnchor constraintEqualToAnchor: layoutGuide.bottomAnchor]];
             }
-        }
-    }
-    // Check if the publisher wants vertical banners.
-    else if ( [adViewPosition isEqual: @"center_left"] || [adViewPosition isEqual: @"center_right"] )
-    {
-        if ( MAAdFormat.mrec == adFormat )
-        {
-            [constraints addObject: [adView.widthAnchor constraintEqualToConstant: adViewSize.width]];
-            
-            if ( [adViewPosition isEqual: @"center_left"] )
-            {
-                [constraints addObjectsFromArray: @[[adView.centerYAnchor constraintEqualToAnchor: layoutGuide.centerYAnchor],
-                                                    [adView.leftAnchor constraintEqualToAnchor: superview.leftAnchor]]];
-                
-                [constraints addObjectsFromArray: @[[self.safeAreaBackground.rightAnchor constraintEqualToAnchor: layoutGuide.leftAnchor],
-                                                    [self.safeAreaBackground.leftAnchor constraintEqualToAnchor: superview.leftAnchor]]];
-            }
-            else // center_right
-            {
-                [constraints addObjectsFromArray: @[[adView.centerYAnchor constraintEqualToAnchor: layoutGuide.centerYAnchor],
-                                                    [adView.rightAnchor constraintEqualToAnchor: superview.rightAnchor]]];
-                
-                [constraints addObjectsFromArray: @[[self.safeAreaBackground.leftAnchor constraintEqualToAnchor: layoutGuide.rightAnchor],
-                                                    [self.safeAreaBackground.rightAnchor constraintEqualToAnchor: superview.rightAnchor]]];
-            }
-        }
-        else
-        {
-            /* Align the center of the view such that when rotated it snaps into place.
-             *
-             *                  +---+---+-------+
-             *                  |   |           |
-             *                  |   |           |
-             *                  |   |           |
-             *                  |   |           |
-             *                  |   |           |
-             *                  |   |           |
-             *    +-------------+---+-----------+--+
-             *    |             | + |   +       |  |
-             *    +-------------+---+-----------+--+
-             *                  <+> |           |
-             *                  |+  |           |
-             *                  ||  |           |
-             *                  ||  |           |
-             *                  ||  |           |
-             *                  ||  |           |
-             *                  +|--+-----------+
-             *                   v
-             *            Banner Half Height
-             */
-            self.safeAreaBackground.hidden = YES;
-            
-            adView.transform = CGAffineTransformRotate(CGAffineTransformIdentity, M_PI_2);
-            
-            CGFloat width;
-            // If the publisher has a background color set - set the width to the height of the screen, to span the ad across the screen after it is rotated.
-            if ( self.publisherBannerBackgroundColor )
-            {
-                width = CGRectGetHeight(KEY_WINDOW.bounds);
-            }
-            // Otherwise - we shouldn't span the banner the width of the realm (there might be user-interactable UI on the sides)
-            else
-            {
-                width = adViewSize.width;
-            }
-            [constraints addObject: [adView.widthAnchor constraintEqualToConstant: width]];
-            
-            // Set constraints such that the center of the banner aligns with the center left or right as needed. That way, once rotated, the banner snaps into place.
-            [constraints addObject: [adView.centerYAnchor constraintEqualToAnchor: superview.centerYAnchor]];
-            
-            // Place the center of the banner half the height of the banner away from the side. If we align the center exactly with the left/right anchor, only half the banner will be visible.
-            CGFloat bannerHalfHeight = adViewSize.height / 2.0;
-            UIInterfaceOrientation orientation = [UIApplication sharedApplication].statusBarOrientation;
-            if ( [adViewPosition isEqual: @"center_left"] )
-            {
-                NSLayoutAnchor *anchor = ( orientation == UIInterfaceOrientationLandscapeRight ) ? layoutGuide.leftAnchor : superview.leftAnchor;
-                [constraints addObject: [adView.centerXAnchor constraintEqualToAnchor: anchor constant: bannerHalfHeight]];
-            }
-            else // CenterRight
-            {
-                NSLayoutAnchor *anchor = ( orientation == UIInterfaceOrientationLandscapeLeft ) ? layoutGuide.rightAnchor : superview.rightAnchor;
-                [constraints addObject: [adView.centerXAnchor constraintEqualToAnchor: anchor constant: -bannerHalfHeight]];
-            }
-            
-            // Store the ad view with format, so that it can be updated when the orientation changes.
-            self.verticalAdViewFormats[adUnitIdentifier] = adFormat;
         }
     }
     // Otherwise, publisher will likely construct their own views around the adview
@@ -1259,30 +1129,27 @@ static NSString *const TAG = @"MADefoldPlugin";
              @"creativeIdentifier" : ad.creativeIdentifier ?: @"",
              @"networkName" : ad.networkName,
              @"placement" : ad.placement ?: @"",
-             @"revenue" : ad.revenue == 0 ? @(ad.revenue) : @(-1)};
+             @"revenue" : @(ad.revenue)};
 }
 
 - (NSDictionary<NSString *, id> *)errorInfoForError:(MAError *)error
 {
     return @{@"code" : @(error.code),
-             @"message" : error.message ?: @"",
-             @"waterfall" : error.waterfall.description ?: @""};
+             @"message" : error.message ?: @""};
 }
 
-- (ALConsentFlowUserGeography)userGeographyForString:(NSString *)userGeographyString
+- (ALConsentFlowUserGeography)toAppLovinConsentFlowUserGeography:(NSString *)userGeography
 {
-    if ( [userGeographyString al_isEqualToStringIgnoringCase: @"UNKNOWN"] )
-    {
-        return ALConsentFlowUserGeographyUnknown;
-    }
-    else if ( [userGeographyString al_isEqualToStringIgnoringCase: @"GDPR"] )
+    if ( [@"GDPR" al_isEqualToStringIgnoringCase: userGeography] )
     {
         return ALConsentFlowUserGeographyGDPR;
     }
-    else
+    else if ( [@"OTHER" al_isEqualToStringIgnoringCase: userGeography] )
     {
         return ALConsentFlowUserGeographyOther;
     }
+
+    return ALConsentFlowUserGeographyUnknown;
 }
 
 #pragma mark - Defold Bridge

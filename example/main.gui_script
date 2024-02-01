@@ -28,7 +28,7 @@ local data = {
 local actions = {}
 
 actions.back = function(self, el)
-    ads.destroy_current_ad()
+    ads.on_back_button_clicked()
     
     ui.disable_all(self.ui, "page")
     ui.enable(self.ui.main_page, true)
@@ -56,7 +56,7 @@ actions.banner = function(self, el)
 end
 
 actions.load = function(self, el)
-    ads.load_button_clicked()
+    ads.on_load_button_clicked()
 end
 
 function setup_ads_page(self, ad_type)

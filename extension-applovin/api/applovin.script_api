@@ -73,7 +73,6 @@
           Ad load failed, displayed failed event {
             "code" - int, error code for the error
             "message" - string, error message for the error
-            "waterfall" - string, underlying waterfall of ad responses
             "adUnitIdentifier" - string, ad unit id for this ad
           }
 
@@ -297,7 +296,7 @@
       type: string
     - name: banner_position
       type: string
-      desc: Possible options are "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+      desc: Possible options are "top_left", "top_center", "top_right", "centered", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
@@ -345,7 +344,7 @@
       type: string
     - name: banner_position
       type: string
-      desc: Possible options are "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+      desc: Possible options are "top_left", "top_center", "top_right", "centered", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
@@ -384,7 +383,7 @@
       type: string
     - name: mrec_position
       type: string
-      desc: Possible options are "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+      desc: Possible options are "top_left", "top_center", "top_right", "centered", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 
@@ -420,7 +419,7 @@
       type: string
     - name: mrec_position
       type: string
-      desc: Possible options are "top_left", "top_center", "top_right", "centered", "center_left", "center_right", "bottom_left", "bottom_center", "bottom_right"
+      desc: Possible options are "top_left", "top_center", "top_right", "centered", "bottom_left", "bottom_center", "bottom_right"
 
 #*****************************************************************************************************
 

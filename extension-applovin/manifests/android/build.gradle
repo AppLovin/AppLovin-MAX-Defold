@@ -1,4 +1,4 @@
-// Please see https://dash.applovin.com/documentation/mediation/unreal/mediation-adapters/android for integrating mediated networks.
+// Please see https://dash.applovin.com/documentation/mediation/defold/mediation-adapters/android for integrating mediated networks.
 // Repos
 repositories {
     google()

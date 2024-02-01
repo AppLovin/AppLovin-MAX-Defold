@@ -21,13 +21,8 @@ struct AppLovin
     jobject   m_MaxDefoldPlugin;
 
     jmethodID m_Initialize;
-    jmethodID m_ShowMediationDebugger;
-    jmethodID m_LoadInterstitial;
-    jmethodID m_ShowInterstitial;
-    jmethodID m_IsInterstitialReady;
-    jmethodID m_OnPause;
-    jmethodID m_OnResume;
     jmethodID m_IsInitialized;
+    jmethodID m_ShowMediationDebugger;
     jmethodID m_SetHasUserConsent;
     jmethodID m_HasUserConsent;
     jmethodID m_SetIsAgeRestrictedUser;
@@ -49,6 +44,14 @@ struct AppLovin
     jmethodID m_SetCreativeDebuggerEnabled;
     jmethodID m_SetTestDeviceAdvertisingIds;
     jmethodID m_TrackEvent;
+    jmethodID m_LoadInterstitial;
+    jmethodID m_IsInterstitialReady;
+    jmethodID m_ShowInterstitial;
+    jmethodID m_SetInterstitialExtraParameter;
+    jmethodID m_LoadRewardedAd;
+    jmethodID m_IsRewardedAdReady;
+    jmethodID m_ShowRewardedAd;
+    jmethodID m_SetRewardedAdExtraParameter;
     jmethodID m_CreateBanner;
     jmethodID m_SetBannerBackgroundColor;
     jmethodID m_SetBannerPlacement;
@@ -64,10 +67,6 @@ struct AppLovin
     jmethodID m_ShowMRec;
     jmethodID m_HideMRec;
     jmethodID m_DestroyMRec;
-    jmethodID m_LoadRewardedAd;
-    jmethodID m_IsRewardedAdReady;
-    jmethodID m_ShowRewardedAd;
-    jmethodID m_SetRewardedAdExtraParameter;
 };
 
 static AppLovin   g_applovin;
@@ -183,11 +182,6 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
 {
     g_applovin.m_Initialize = env->GetMethodID(cls, "initialize", "(Ljava/lang/String;)V");
     g_applovin.m_ShowMediationDebugger = env->GetMethodID(cls, "showMediationDebugger", "()V");
-    g_applovin.m_LoadInterstitial = env->GetMethodID(cls, "loadInterstitial", "(Ljava/lang/String;)V");
-    g_applovin.m_ShowInterstitial = env->GetMethodID(cls, "showInterstitial", "(Ljava/lang/String;)V");
-    g_applovin.m_IsInterstitialReady = env->GetMethodID(cls, "isInterstitialReady", "(Ljava/lang/String;)Z");
-    g_applovin.m_OnPause = env->GetMethodID(cls, "onPause", "()V");
-    g_applovin.m_OnResume = env->GetMethodID(cls, "onResume", "()V");
     g_applovin.m_IsInitialized = env->GetMethodID(cls, "isInitialized", "()Z");
     g_applovin.m_SetHasUserConsent = env->GetMethodID(cls, "setHasUserConsent", "(Z)V");
     g_applovin.m_HasUserConsent = env->GetMethodID(cls, "hasUserConsent", "()Z");
@@ -210,6 +204,14 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_SetCreativeDebuggerEnabled = env->GetMethodID(cls, "setCreativeDebuggerEnabled", "(Z)V");
     g_applovin.m_SetTestDeviceAdvertisingIds = env->GetMethodID(cls, "setTestDeviceAdvertisingIds", "([Ljava/lang/String;)V");
     g_applovin.m_TrackEvent = env->GetMethodID(cls, "trackEvent", "(Ljava/lang/String;Ljava/lang/String;)V");
+    g_applovin.m_LoadInterstitial = env->GetMethodID(cls, "loadInterstitial", "(Ljava/lang/String;)V");
+    g_applovin.m_IsInterstitialReady = env->GetMethodID(cls, "isInterstitialReady", "(Ljava/lang/String;)Z");
+    g_applovin.m_ShowInterstitial = env->GetMethodID(cls, "showInterstitial", "(Ljava/lang/String;)V");
+    g_applovin.m_SetInterstitialExtraParameter = env->GetMethodID(cls, "setInterstitialExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    g_applovin.m_LoadRewardedAd = env->GetMethodID(cls, "loadRewardedAd", "(Ljava/lang/String;)V");
+    g_applovin.m_IsRewardedAdReady = env->GetMethodID(cls, "isRewardedAdReady", "(Ljava/lang/String;)Z");
+    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;)V");
+    g_applovin.m_SetRewardedAdExtraParameter = env->GetMethodID(cls, "setRewardedAdExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_CreateBanner = env->GetMethodID(cls, "createBanner", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetBannerBackgroundColor = env->GetMethodID(cls, "setBannerBackgroundColor", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetBannerPlacement = env->GetMethodID(cls, "setBannerPlacement", "(Ljava/lang/String;Ljava/lang/String;)V");
@@ -225,10 +227,6 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_ShowMRec = env->GetMethodID(cls, "showMRec", "(Ljava/lang/String;)V");
     g_applovin.m_HideMRec = env->GetMethodID(cls, "hideMRec", "(Ljava/lang/String;)V");
     g_applovin.m_DestroyMRec = env->GetMethodID(cls, "destroyMRec", "(Ljava/lang/String;)V");
-    g_applovin.m_LoadRewardedAd = env->GetMethodID(cls, "loadRewardedAd", "(Ljava/lang/String;)V");
-    g_applovin.m_IsRewardedAdReady = env->GetMethodID(cls, "isRewardedAdReady", "(Ljava/lang/String;)Z");
-    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;)V");
-    g_applovin.m_SetRewardedAdExtraParameter = env->GetMethodID(cls, "setRewardedAdExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 }
 
 void Initialize_Ext(const char* version, const char* extVersion)
@@ -251,39 +249,14 @@ void Initialize(const char* sdkKey)
     CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_Initialize, sdkKey);
 }
 
-void ShowMediationDebugger()
-{
-    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowMediationDebugger);
-}
-
-void LoadInterstitial(const char* adUnitId)
-{
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_LoadInterstitial, adUnitId);
-}
-
-void ShowInterstitial(const char* adUnitId)
-{
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowInterstitial, adUnitId);
-}
-
-bool IsInterstitialReady(const char* adUnitId)
-{
-    return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsInterstitialReady, adUnitId);
-}
-
-void OnPause()
-{
-    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_OnPause);
-}
-
-void OnResume()
-{
-    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_OnResume);
-}
-
 bool IsInitialized()
 {
     return CallBoolMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsInitialized);
+}
+
+void ShowMediationDebugger()
+{
+    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowMediationDebugger);
 }
 
 void SetHasUserConsent(bool hasUserConsent)
@@ -399,6 +372,46 @@ void TrackEvent(const char* event, const char* parameters)
     CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_TrackEvent, event, parameters);
 }
 
+void LoadInterstitial(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_LoadInterstitial, adUnitId);
+}
+
+bool IsInterstitialReady(const char* adUnitId)
+{
+    return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsInterstitialReady, adUnitId);
+}
+
+void ShowInterstitial(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowInterstitial, adUnitId);
+}
+
+void SetInterstitialExtraParameter(const char* adUnitId, const char* key, const char* value)
+{
+    CallVoidMethodCharCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetInterstitialExtraParameter, adUnitId, key, value);
+}
+
+void LoadRewardedAd(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_LoadRewardedAd, adUnitId);
+}
+
+bool IsRewardedAdReady(const char* adUnitId)
+{
+    return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsRewardedAdReady, adUnitId);
+}
+
+void ShowRewardedAd(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowRewardedAd, adUnitId);
+}
+
+void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
+{
+    CallVoidMethodCharCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetRewardedAdExtraParameter, adUnitId, key, value);
+}
+
 void CreateBanner(const char* adUnitId, const char* bannerPosition)
 {
     CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_CreateBanner, adUnitId, bannerPosition);
@@ -472,26 +485,6 @@ void HideMRec(const char* adUnitId)
 void DestroyMRec(const char* adUnitId)
 {
     CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_DestroyMRec, adUnitId);
-}
-
-void LoadRewardedAd(const char* adUnitId)
-{
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_LoadRewardedAd, adUnitId);
-}
-
-bool IsRewardedAdReady(const char* adUnitId)
-{
-    return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsRewardedAdReady, adUnitId);
-}
-
-void ShowRewardedAd(const char* adUnitId)
-{
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowRewardedAd, adUnitId);
-}
-
-void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
-{
-    CallVoidMethodCharCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetRewardedAdExtraParameter, adUnitId, key, value);
 }
 
 }//namespace dmAppLovin

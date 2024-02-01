@@ -69,14 +69,15 @@ public class MaxDefoldPlugin
 
     // Store these values if pub sets before initializing
     private String       userIdToSet;
+    private Boolean      mutedToSet;
     private List<String> testDeviceAdvertisingIdsToSet;
     private Boolean      verboseLoggingToSet;
     private Boolean      creativeDebuggerEnabledToSet;
 
-    private Boolean                  termsAndPrivacyPolicyFlowEnabledToSet;
-    private Uri                      privacyPolicyUriToSet;
-    private Uri                      termsOfServiceUriToSet;
-    private ConsentFlowUserGeography userGeographyToSet;
+    private Boolean termsAndPrivacyPolicyFlowEnabledToSet;
+    private Uri     privacyPolicyUriToSet;
+    private Uri     termsOfServiceUriToSet;
+    private String  debugUserGeographyToSet;
 
     // Fullscreen Ad Fields
     private final Map<String, MaxInterstitialAd> mInterstitials = new HashMap<>( 2 );
@@ -86,7 +87,6 @@ public class MaxDefoldPlugin
     private final Map<String, MaxAdView>   mAdViews                    = new HashMap<>( 2 );
     private final Map<String, MaxAdFormat> mAdViewAdFormats            = new HashMap<>( 2 );
     private final Map<String, String>      mAdViewPositions            = new HashMap<>( 2 );
-    private final Map<String, MaxAdFormat> mVerticalAdViewFormats      = new HashMap<>( 2 );
     private final List<String>             mAdUnitIdsToShowAfterCreate = new ArrayList<>( 2 );
 
     private final WeakReference<Activity> gameActivity;
@@ -103,14 +103,9 @@ public class MaxDefoldPlugin
         this.pluginVersion = pluginVersion;
     }
 
-    public void onResume()
+    public boolean isInitialized()
     {
-        // no-op
-    }
-
-    public void onPause()
-    {
-        // no-op
+        return isPluginInitialized && isSdkInitialized;
     }
 
     public void initialize(final String sdkKey)
@@ -156,7 +151,59 @@ public class MaxDefoldPlugin
             }
         }
 
-        sdk = AppLovinSdk.getInstance( sdkKeyToUse, new AppLovinSdkSettings( context ), currentActivity );
+        AppLovinSdkSettings settings = new AppLovinSdkSettings( context );
+
+        // Selective init
+        if ( termsAndPrivacyPolicyFlowEnabledToSet != null )
+        {
+            settings.getTermsAndPrivacyPolicyFlowSettings().setEnabled( termsAndPrivacyPolicyFlowEnabledToSet );
+            termsAndPrivacyPolicyFlowEnabledToSet = null;
+        }
+
+        if ( privacyPolicyUriToSet != null )
+        {
+            settings.getTermsAndPrivacyPolicyFlowSettings().setPrivacyPolicyUri( privacyPolicyUriToSet );
+            privacyPolicyUriToSet = null;
+        }
+
+        if ( termsOfServiceUriToSet != null )
+        {
+            settings.getTermsAndPrivacyPolicyFlowSettings().setTermsOfServiceUri( termsOfServiceUriToSet );
+            termsOfServiceUriToSet = null;
+        }
+
+        if ( AppLovinSdkUtils.isValidString( debugUserGeographyToSet ) )
+        {
+            settings.getTermsAndPrivacyPolicyFlowSettings().setDebugUserGeography( getAppLovinConsentFlowUserGeography( debugUserGeographyToSet ) );
+            debugUserGeographyToSet = null;
+        }
+
+        if ( mutedToSet != null )
+        {
+            settings.setMuted( mutedToSet );
+            mutedToSet = null;
+        }
+
+        if ( testDeviceAdvertisingIdsToSet != null )
+        {
+            settings.setTestDeviceAdvertisingIds( testDeviceAdvertisingIdsToSet );
+            testDeviceAdvertisingIdsToSet = null;
+        }
+
+        if ( verboseLoggingToSet != null )
+        {
+            settings.setVerboseLogging( verboseLoggingToSet );
+            verboseLoggingToSet = null;
+        }
+
+        if ( creativeDebuggerEnabledToSet != null )
+        {
+            settings.setCreativeDebuggerEnabled( creativeDebuggerEnabledToSet );
+            creativeDebuggerEnabledToSet = null;
+        }
+
+        // Initialize SDK
+        sdk = AppLovinSdk.getInstance( sdkKeyToUse, settings, currentActivity );
         sdk.setPluginVersion( "Defold-" + pluginVersion );
         sdk.setMediationProvider( AppLovinMediationProvider.MAX );
 
@@ -164,48 +211,6 @@ public class MaxDefoldPlugin
         {
             sdk.setUserIdentifier( userIdToSet );
             userIdToSet = null;
-        }
-
-        if ( testDeviceAdvertisingIdsToSet != null )
-        {
-            sdk.getSettings().setTestDeviceAdvertisingIds( testDeviceAdvertisingIdsToSet );
-            testDeviceAdvertisingIdsToSet = null;
-        }
-
-        if ( verboseLoggingToSet != null )
-        {
-            sdk.getSettings().setVerboseLogging( verboseLoggingToSet );
-            verboseLoggingToSet = null;
-        }
-
-        if ( creativeDebuggerEnabledToSet != null )
-        {
-            sdk.getSettings().setCreativeDebuggerEnabled( creativeDebuggerEnabledToSet );
-            creativeDebuggerEnabledToSet = null;
-        }
-
-        if ( termsAndPrivacyPolicyFlowEnabledToSet != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setEnabled( termsAndPrivacyPolicyFlowEnabledToSet );
-            termsAndPrivacyPolicyFlowEnabledToSet = null;
-        }
-
-        if ( privacyPolicyUriToSet != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setPrivacyPolicyUri( privacyPolicyUriToSet );
-            privacyPolicyUriToSet = null;
-        }
-
-        if ( termsOfServiceUriToSet != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setTermsOfServiceUri( termsOfServiceUriToSet );
-            termsOfServiceUriToSet = null;
-        }
-
-        if ( userGeographyToSet != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setDebugUserGeography( userGeographyToSet );
-            userGeographyToSet = null;
         }
 
         sdk.initializeSdk( new AppLovinSdk.SdkInitializationListener()
@@ -217,19 +222,6 @@ public class MaxDefoldPlugin
 
                 sdkConfiguration = configuration;
                 isSdkInitialized = true;
-
-                // Enable orientation change listener, so that the position can be updated for vertical banners.
-                new OrientationEventListener( context )
-                {
-                    @Override
-                    public void onOrientationChanged(final int orientation)
-                    {
-                        for ( final Map.Entry<String, MaxAdFormat> adUnitFormats : mVerticalAdViewFormats.entrySet() )
-                        {
-                            positionAdView( adUnitFormats.getKey(), adUnitFormats.getValue() );
-                        }
-                    }
-                }.enable();
 
                 sendDefoldEvent( "OnSdkInitializedEvent", getInitializationMessage( context ) );
             }
@@ -251,11 +243,6 @@ public class MaxDefoldPlugin
         JsonUtils.putBoolean( message, "isTablet", AppLovinSdkUtils.isTablet( context ) );
 
         return message;
-    }
-
-    public boolean isInitialized()
-    {
-        return isPluginInitialized && isSdkInitialized;
     }
 
     public void showMediationDebugger()
@@ -302,60 +289,118 @@ public class MaxDefoldPlugin
     }
     // endregion
 
+    // region General
+    public boolean isTablet()
+    {
+        return AppLovinSdkUtils.isTablet( getGameActivity() );
+    }
+
+    public void setUserId(String userId)
+    {
+        if ( isPluginInitialized )
+        {
+            sdk.setUserIdentifier( userId );
+            userIdToSet = null;
+        }
+        else
+        {
+            userIdToSet = userId;
+        }
+    }
+
+    public void setMuted(final boolean muted)
+    {
+        if ( isPluginInitialized )
+        {
+            sdk.getSettings().setMuted( muted );
+            mutedToSet = null;
+        }
+        else
+        {
+            mutedToSet = muted;
+        }
+    }
+
+    public boolean isMuted()
+    {
+        if ( !isPluginInitialized ) return false;
+
+        return sdk.getSettings().isMuted();
+    }
+
+    public void setVerboseLoggingEnabled(final boolean enabled)
+    {
+        if ( isPluginInitialized )
+        {
+            sdk.getSettings().setVerboseLogging( enabled );
+            verboseLoggingToSet = null;
+        }
+        else
+        {
+            verboseLoggingToSet = enabled;
+        }
+    }
+
+    public boolean isVerboseLoggingEnabled()
+    {
+        if ( isPluginInitialized )
+        {
+            return sdk.getSettings().isVerboseLoggingEnabled();
+        }
+        else if ( verboseLoggingToSet != null )
+        {
+            return verboseLoggingToSet;
+        }
+
+        return false;
+    }
+
+    public void setCreativeDebuggerEnabled(final boolean enabled)
+    {
+        if ( isPluginInitialized )
+        {
+            sdk.getSettings().setCreativeDebuggerEnabled( enabled );
+            creativeDebuggerEnabledToSet = null;
+        }
+        else
+        {
+            creativeDebuggerEnabledToSet = enabled;
+        }
+    }
+
+    public void setTestDeviceAdvertisingIds(final String[] advertisingIds)
+    {
+        if ( isPluginInitialized )
+        {
+            sdk.getSettings().setTestDeviceAdvertisingIds( Arrays.asList( advertisingIds ) );
+            testDeviceAdvertisingIdsToSet = null;
+        }
+        else
+        {
+            testDeviceAdvertisingIdsToSet = Arrays.asList( advertisingIds );
+        }
+    }
+    // endregion
+
     // region Terms and Privacy Policy Flow
     public void setTermsAndPrivacyPolicyFlowEnabled(final boolean enabled)
     {
-        if ( sdk != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setEnabled( enabled );
-            termsAndPrivacyPolicyFlowEnabledToSet = null;
-        }
-        else
-        {
-            termsAndPrivacyPolicyFlowEnabledToSet = enabled;
-        }
+        termsAndPrivacyPolicyFlowEnabledToSet = enabled;
     }
 
-    public void setPrivacyPolicyUrl(final String uriString)
+    public void setPrivacyPolicyUrl(final String urlString)
     {
-        Uri uri = Uri.parse( uriString );
-        if ( sdk != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setPrivacyPolicyUri( uri );
-            privacyPolicyUriToSet = null;
-        }
-        else
-        {
-            privacyPolicyUriToSet = uri;
-        }
+        privacyPolicyUriToSet = Uri.parse( urlString );
     }
 
-    public void setTermsOfServiceUrl(final String uriString)
+    public void setTermsOfServiceUrl(final String urlString)
     {
-        Uri uri = Uri.parse( uriString );
-        if ( sdk != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setTermsOfServiceUri( uri );
-            termsOfServiceUriToSet = null;
-        }
-        else
-        {
-            termsOfServiceUriToSet = uri;
-        }
+        termsOfServiceUriToSet = Uri.parse( urlString );
     }
 
-    public void setConsentFlowDebugUserGeography(final String userGeographyString)
+    public void setConsentFlowDebugUserGeography(final String userGeography)
     {
-        ConsentFlowUserGeography userGeography = ConsentFlowUserGeography.valueOf( userGeographyString );
-        if ( sdk != null )
-        {
-            sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setDebugUserGeography( userGeography );
-            userGeographyToSet = null;
-        }
-        else
-        {
-            userGeographyToSet = userGeography;
-        }
+        debugUserGeographyToSet = userGeography;
     }
 
     public void showCmpForExistingUser()
@@ -389,93 +434,6 @@ public class MaxDefoldPlugin
     }
     // endregion
 
-    // region General
-    public boolean isTablet()
-    {
-        return AppLovinSdkUtils.isTablet( getGameActivity() );
-    }
-
-    public void setUserId(String userId)
-    {
-        if ( sdk != null )
-        {
-            sdk.setUserIdentifier( userId );
-            userIdToSet = null;
-        }
-        else
-        {
-            userIdToSet = userId;
-        }
-    }
-
-    public void setMuted(final boolean muted)
-    {
-        if ( !isPluginInitialized ) return;
-
-        sdk.getSettings().setMuted( muted );
-    }
-
-    public boolean isMuted()
-    {
-        if ( !isPluginInitialized ) return false;
-
-        return sdk.getSettings().isMuted();
-    }
-
-    public void setVerboseLoggingEnabled(final boolean enabled)
-    {
-        if ( sdk != null )
-        {
-            sdk.getSettings().setVerboseLogging( enabled );
-            verboseLoggingToSet = null;
-        }
-        else
-        {
-            verboseLoggingToSet = enabled;
-        }
-    }
-
-    public boolean isVerboseLoggingEnabled()
-    {
-        if ( sdk != null )
-        {
-            return sdk.getSettings().isVerboseLoggingEnabled();
-        }
-        else if ( verboseLoggingToSet != null )
-        {
-            return verboseLoggingToSet;
-        }
-
-        return false;
-    }
-
-    public void setCreativeDebuggerEnabled(final boolean enabled)
-    {
-        if ( sdk != null )
-        {
-            sdk.getSettings().setCreativeDebuggerEnabled( enabled );
-            creativeDebuggerEnabledToSet = null;
-        }
-        else
-        {
-            creativeDebuggerEnabledToSet = enabled;
-        }
-    }
-
-    public void setTestDeviceAdvertisingIds(final String[] advertisingIds)
-    {
-        if ( isPluginInitialized )
-        {
-            sdk.getSettings().setTestDeviceAdvertisingIds( Arrays.asList( advertisingIds ) );
-            testDeviceAdvertisingIdsToSet = null;
-        }
-        else
-        {
-            testDeviceAdvertisingIdsToSet = Arrays.asList( advertisingIds );
-        }
-    }
-    // endregion
-
     // region Event Tracking
     public void trackEvent(final String event, final String parameters)
     {
@@ -483,6 +441,58 @@ public class MaxDefoldPlugin
 
         final Map<String, String> deserialized = deserialize( parameters );
         sdk.getEventService().trackEvent( event, deserialized );
+    }
+    // endregion
+
+    // region Interstitials
+    public void loadInterstitial(final String adUnitId)
+    {
+        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
+        interstitial.loadAd();
+    }
+
+    public boolean isInterstitialReady(String adUnitId)
+    {
+        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
+        return interstitial.isReady();
+    }
+
+    public void showInterstitial(final String adUnitId)
+    {
+        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
+        interstitial.showAd();
+    }
+
+    public void setInterstitialExtraParameter(final String adUnitId, final String key, final String value)
+    {
+        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
+        interstitial.setExtraParameter( key, value );
+    }
+    // endregion
+
+    // region Rewarded
+    public void loadRewardedAd(final String adUnitId)
+    {
+        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
+        rewardedAd.loadAd();
+    }
+
+    public boolean isRewardedAdReady(final String adUnitId)
+    {
+        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
+        return rewardedAd.isReady();
+    }
+
+    public void showRewardedAd(final String adUnitId)
+    {
+        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
+        rewardedAd.showAd();
+    }
+
+    public void setRewardedAdExtraParameter(final String adUnitId, final String key, final String value)
+    {
+        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
+        rewardedAd.setExtraParameter( key, value );
     }
     // endregion
 
@@ -565,65 +575,13 @@ public class MaxDefoldPlugin
     }
     // endregion
 
-    // region Interstitials
-    public void loadInterstitial(final String adUnitId)
-    {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.loadAd();
-    }
-
-    public boolean isInterstitialReady(String adUnitId)
-    {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        return interstitial.isReady();
-    }
-
-    public void showInterstitial(final String adUnitId)
-    {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.showAd();
-    }
-
-    public void setInterstitialExtraParameter(final String adUnitId, final String key, final String value)
-    {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.setExtraParameter( key, value );
-    }
-    //     endregion
-
-    //     region Rewarded
-    public void loadRewardedAd(final String adUnitId)
-    {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.loadAd();
-    }
-
-    public boolean isRewardedAdReady(final String adUnitId)
-    {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        return rewardedAd.isReady();
-    }
-
-    public void showRewardedAd(final String adUnitId)
-    {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.showAd();
-    }
-
-    public void setRewardedAdExtraParameter(final String adUnitId, final String key, final String value)
-    {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.setExtraParameter( key, value );
-    }
-    // endregion
-
     // region Ad Callbacks
     @Override
     public void onAdLoaded(MaxAd ad)
     {
         String name;
         MaxAdFormat adFormat = ad.getFormat();
-        if ( MaxAdFormat.BANNER == adFormat || MaxAdFormat.LEADER == adFormat || MaxAdFormat.MREC == adFormat )
+        if ( adFormat.isAdViewAd() )
         {
             name = ( MaxAdFormat.MREC == adFormat ) ? "OnMRecAdLoadedEvent" : "OnBannerAdLoadedEvent";
 
@@ -790,7 +748,7 @@ public class MaxDefoldPlugin
     public void onAdExpanded(final MaxAd ad)
     {
         final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.BANNER && adFormat != MaxAdFormat.LEADER && adFormat != MaxAdFormat.MREC )
+        if ( !adFormat.isAdViewAd() )
         {
             logInvalidAdFormat( adFormat );
             return;
@@ -803,7 +761,7 @@ public class MaxDefoldPlugin
     public void onAdCollapsed(final MaxAd ad)
     {
         final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.BANNER && adFormat != MaxAdFormat.LEADER && adFormat != MaxAdFormat.MREC )
+        if ( !adFormat.isAdViewAd() )
         {
             logInvalidAdFormat( adFormat );
             return;
@@ -1050,7 +1008,6 @@ public class MaxDefoldPlugin
                 mAdViews.remove( adUnitId );
                 mAdViewAdFormats.remove( adUnitId );
                 mAdViewPositions.remove( adUnitId );
-                mVerticalAdViewFormats.remove( adUnitId );
             }
         } );
     }
@@ -1227,7 +1184,6 @@ public class MaxDefoldPlugin
         adView.setRotation( 0 );
         adView.setTranslationX( 0 );
         params.setMargins( 0, 0, 0, 0 );
-        mVerticalAdViewFormats.remove( adUnitId );
 
         if ( "centered".equalsIgnoreCase( adViewPosition ) )
         {
@@ -1255,65 +1211,6 @@ public class MaxDefoldPlugin
             {
                 gravity |= Gravity.CENTER_HORIZONTAL;
                 params.width = ( MaxAdFormat.MREC == adFormat ) ? width : RelativeLayout.LayoutParams.MATCH_PARENT; // Stretch width if banner
-
-                // Check if the publisher wants the ad view to be vertical and update the position accordingly ('CenterLeft' or 'CenterRight').
-                final boolean containsLeft = adViewPosition.contains( "left" );
-                final boolean containsRight = adViewPosition.contains( "right" );
-                if ( containsLeft || containsRight )
-                {
-                    // First, center the ad view in the view.
-                    gravity |= Gravity.CENTER_VERTICAL;
-
-                    // For banners, set the width to the height of the screen to span the ad across the screen after it is rotated.
-                    // Android by default clips a view bounds if it goes over the size of the screen. We can overcome it by setting negative margins to match our required size.
-                    if ( MaxAdFormat.MREC == adFormat )
-                    {
-                        gravity |= adViewPosition.contains( "left" ) ? Gravity.LEFT : Gravity.RIGHT;
-                    }
-                    else
-                    {
-                        /* Align the center of the view such that when rotated it snaps into place.
-                         *
-                         *                  +---+---+-------+
-                         *                  |   |           |
-                         *                  |   |           |
-                         *                  |   |           |
-                         *                  |   |           |
-                         *                  |   |           |
-                         *                  |   |           |
-                         *    +-------------+---+-----------+--+
-                         *    |             | + |   +       |  |
-                         *    +-------------+---+-----------+--+
-                         *                  |   |           |
-                         *                  | ^ |   ^       |
-                         *                  | +-----+       |
-                         *                  Translation     |
-                         *                  |   |           |
-                         *                  |   |           |
-                         *                  +---+-----------+
-                         */
-                        final Rect windowRect = new Rect();
-                        getGameActivity().getWindow().getDecorView().getWindowVisibleDisplayFrame( windowRect );
-
-                        final int windowWidth = windowRect.width();
-                        final int windowHeight = windowRect.height();
-                        final int longSide = Math.max( windowWidth, windowHeight );
-                        final int shortSide = Math.min( windowWidth, windowHeight );
-                        final int margin = ( longSide - shortSide ) / 2;
-                        params.setMargins( -margin, 0, -margin, 0 );
-
-                        // The view is now at the center of the screen and so is it's pivot point. Move its center such that when rotated, it snaps into the vertical position we need.
-                        final int translationRaw = ( windowWidth / 2 ) - ( height / 2 );
-                        final int translationX = containsLeft ? -translationRaw : translationRaw;
-                        adView.setTranslationX( translationX );
-
-                        // We have the view's center in the correct position. Now rotate it to snap into place.
-                        adView.setRotation( 270 );
-
-                        // Store the ad view with format, so that it can be updated when the orientation changes.
-                        mVerticalAdViewFormats.put( adUnitId, adFormat );
-                    }
-                }
             }
             else
             {
@@ -1387,7 +1284,7 @@ public class MaxDefoldPlugin
         JsonUtils.putString( adInfo, "creativeIdentifier", StringUtils.emptyIfNull( ad.getCreativeId() ) );
         JsonUtils.putString( adInfo, "networkName", ad.getNetworkName() );
         JsonUtils.putString( adInfo, "placement", StringUtils.emptyIfNull( ad.getPlacement() ) );
-        JsonUtils.putDouble( adInfo, "revenue", ad.getRevenue() != 0 ? ad.getRevenue() : -1 );
+        JsonUtils.putDouble( adInfo, "revenue", ad.getRevenue() );
 
         return adInfo;
     }
@@ -1398,7 +1295,6 @@ public class MaxDefoldPlugin
 
         JsonUtils.putInt( errorInfo, "code", error.getCode() );
         JsonUtils.putString( errorInfo, "message", error.getMessage() );
-        JsonUtils.putString( errorInfo, "waterfall", error.getWaterfall() != null ? error.getWaterfall().toString() : "" );
 
         return errorInfo;
     }
@@ -1418,6 +1314,20 @@ public class MaxDefoldPlugin
         }
 
         return Collections.emptyMap();
+    }
+
+    private static ConsentFlowUserGeography getAppLovinConsentFlowUserGeography(final String userGeography)
+    {
+        if ( "GDPR".equalsIgnoreCase( userGeography ) )
+        {
+            return ConsentFlowUserGeography.GDPR;
+        }
+        else if ( "OTHER".equalsIgnoreCase( userGeography ) )
+        {
+            return ConsentFlowUserGeography.OTHER;
+        }
+
+        return ConsentFlowUserGeography.UNKNOWN;
     }
     // endregion
 

@@ -21,44 +21,19 @@ static int Lua_Initialize(lua_State* L)
     return 0;
 }
 
-static int Lua_ShowMediationDebugger(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    ShowMediationDebugger();
-    return 0;
-}
-
-static int Lua_LoadInterstitial(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    const char* lua_adUnitId = luaL_checkstring(L, 1);
-    LoadInterstitial(lua_adUnitId);
-    return 0;
-}
-
-static int Lua_ShowInterstitial(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    const char* lua_adUnitId = luaL_checkstring(L, 1);
-    ShowInterstitial(lua_adUnitId);
-    return 0;
-}
-
-static int Lua_IsInterstitialReady(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 1);
-    const char* lua_adUnitId = luaL_checkstring(L, 1);
-    bool isReady = IsInterstitialReady(lua_adUnitId);
-    lua_pushboolean(L, isReady);
-    return 1;
-}
-
 static int Lua_IsInitialized(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 1);
     bool isInitialized = IsInitialized();
     lua_pushboolean(L, isInitialized);
     return 1;
+}
+
+static int Lua_ShowMediationDebugger(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ShowMediationDebugger();
+    return 0;
 }
 
 static int Lua_SetHasUserConsent(lua_State* L)
@@ -255,6 +230,76 @@ static int Lua_TrackEvent(lua_State* L)
     return 0;
 }
 
+static int Lua_LoadInterstitial(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* lua_adUnitId = luaL_checkstring(L, 1);
+    LoadInterstitial(lua_adUnitId);
+    return 0;
+}
+
+static int Lua_IsInterstitialReady(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    const char* lua_adUnitId = luaL_checkstring(L, 1);
+    bool isReady = IsInterstitialReady(lua_adUnitId);
+    lua_pushboolean(L, isReady);
+    return 1;
+}
+
+static int Lua_ShowInterstitial(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* lua_adUnitId = luaL_checkstring(L, 1);
+    ShowInterstitial(lua_adUnitId);
+    return 0;
+}
+
+static int Lua_SetInterstitialExtraParameter(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    const char* value = luaL_checkstring(L, 3);
+    SetInterstitialExtraParameter(adUnitId, key, value);
+    return 0;
+}
+
+static int Lua_LoadRewardedAd(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    LoadRewardedAd(adUnitId);
+    return 0;
+}
+
+static int Lua_IsRewardedAdReady(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    bool isReady = IsRewardedAdReady(adUnitId);
+    lua_pushboolean(L, isReady);
+    return 1;
+}
+
+static int Lua_ShowRewardedAd(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    ShowRewardedAd(adUnitId);
+    return 0;
+}
+
+static int Lua_SetRewardedAdExtraParameter(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    const char* value = luaL_checkstring(L, 3);
+    SetRewardedAdExtraParameter(adUnitId, key, value);
+    return 0;
+}
+
 static int Lua_CreateBanner(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
@@ -386,49 +431,11 @@ static int Lua_DestroyMRec(lua_State* L)
     return 0;
 }
 
-static int Lua_LoadRewardedAd(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    const char* adUnitId = luaL_checkstring(L, 1);
-    LoadRewardedAd(adUnitId);
-    return 0;
-}
-
-static int Lua_IsRewardedAdReady(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 1);
-    const char* adUnitId = luaL_checkstring(L, 1);
-    bool isReady = IsRewardedAdReady(adUnitId);
-    lua_pushboolean(L, isReady);
-    return 1;
-}
-
-static int Lua_ShowRewardedAd(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    const char* adUnitId = luaL_checkstring(L, 1);
-    ShowRewardedAd(adUnitId);
-    return 0;
-}
-
-static int Lua_SetRewardedAdExtraParameter(lua_State* L)
-{
-    DM_LUA_STACK_CHECK(L, 0);
-    const char* adUnitId = luaL_checkstring(L, 1);
-    const char* key = luaL_checkstring(L, 2);
-    const char* value = luaL_checkstring(L, 3);
-    SetRewardedAdExtraParameter(adUnitId, key, value);
-    return 0;
-}
-
 static const luaL_reg Module_methods[] =
 {
     {"initialize", Lua_Initialize},
-    {"show_mediation_debugger", Lua_ShowMediationDebugger},
-    {"load_interstitial", Lua_LoadInterstitial},
-    {"show_interstitial", Lua_ShowInterstitial},
-    {"is_interstitial_ready", Lua_IsInterstitialReady},
     {"is_initialized", Lua_IsInitialized},
+    {"show_mediation_debugger", Lua_ShowMediationDebugger},
     {"set_has_user_consent", Lua_SetHasUserConsent},
     {"has_user_consent", Lua_HasUserConsent},
     {"set_is_age_restricted_user", Lua_SetIsAgeRestrictedUser},
@@ -451,6 +458,14 @@ static const luaL_reg Module_methods[] =
     {"set_test_device_advertising_ids", Lua_SetTestDeviceAdvertisingIds},
     {"track_event", Lua_TrackEvent},
     {"create_banner", Lua_CreateBanner},
+    {"load_interstitial", Lua_LoadInterstitial},
+    {"is_interstitial_ready", Lua_IsInterstitialReady},
+    {"show_interstitial", Lua_ShowInterstitial},
+    {"set_interstitial_extra_parameter", Lua_SetRewardedAdExtraParameter},
+    {"load_rewarded_ad", Lua_LoadRewardedAd},
+    {"is_rewarded_ad_ready", Lua_IsRewardedAdReady},
+    {"show_rewarded_ad", Lua_ShowRewardedAd},
+    {"set_rewarded_ad_extra_parameter", Lua_SetRewardedAdExtraParameter},
     {"set_banner_background_color", Lua_SetBannerBackgroundColor},
     {"set_banner_placement", Lua_SetBannerPlacement},
     {"set_banner_extra_parameter", Lua_SetBannerExtraParameter},
@@ -465,10 +480,6 @@ static const luaL_reg Module_methods[] =
     {"show_mrec", Lua_ShowMRec},
     {"hide_mrec", Lua_HideMRec},
     {"destroy_mrec", Lua_DestroyMRec},
-    {"load_rewarded_ad", Lua_LoadRewardedAd},
-    {"is_rewarded_ad_ready", Lua_IsRewardedAdReady},
-    {"show_rewarded_ad", Lua_ShowRewardedAd},
-    {"set_rewarded_ad_extra_parameter", Lua_SetRewardedAdExtraParameter},
     {"set_callback", Lua_SetCallback},
     {0, 0}
 };
@@ -522,22 +533,9 @@ static dmExtension::Result UpdateAppLovin(dmExtension::Params* params)
     return dmExtension::RESULT_OK;
 }
 
-static void OnEventAppLovin(dmExtension::Params* params, const dmExtension::Event* event)
-{
-    switch(event->m_Event)
-    {
-        case dmExtension::EVENT_ID_ACTIVATEAPP:
-            OnResume();
-            break;
-        case dmExtension::EVENT_ID_DEACTIVATEAPP:
-            OnPause();
-            break;
-    }
-}
-
 } //namespace dmAppLovin
 
-DM_DECLARE_EXTENSION(EXTENSION_NAME, LIB_NAME, dmAppLovin::AppInitializeAppLovin, dmAppLovin::AppFinalizeAppLovin, dmAppLovin::InitializeAppLovin, dmAppLovin::UpdateAppLovin, dmAppLovin::OnEventAppLovin, dmAppLovin::FinalizeAppLovin)
+DM_DECLARE_EXTENSION(EXTENSION_NAME, LIB_NAME, dmAppLovin::AppInitializeAppLovin, dmAppLovin::AppFinalizeAppLovin, dmAppLovin::InitializeAppLovin, dmAppLovin::UpdateAppLovin, 0, dmAppLovin::FinalizeAppLovin)
 
 #else
 

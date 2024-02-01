@@ -4,7 +4,7 @@ local log = require("example.log")
 local M = {}
 
 local ios_ad_units = { 
-	Interstitial_ = "ENTER_IOS_INTERSTITIAL_AD_UNIT_ID_HERE",
+	Interstitial = "ENTER_IOS_INTERSTITIAL_AD_UNIT_ID_HERE",
 	Rewarded = "ENTER_IOS_REWARDED_AD_UNIT_ID_HERE",
 	Banner = "ENTER_IOS_BANNER_AD_UNIT_ID_HERE",
 	MRec = "ENTER_ANDROID_MREC_AD_UNIT_ID_HERE"
@@ -43,10 +43,10 @@ local function load_ad()
 		applovin.load_interstitial(ad_unit)
 	elseif selected_ad_type == "Rewarded" then
 		applovin.load_rewarded_ad(ad_unit)
-	elseif selected_ad_type == "MRec" then
-		applovin.create_mrec(ad_unit, "center")
 	elseif selected_ad_type == "Banner" then
 		applovin.create_banner(ad_unit, "top_center")
+	elseif selected_ad_type == "MRec" then
+		applovin.create_mrec(ad_unit, "centered")
 	end
 end
 
@@ -55,10 +55,10 @@ local function show_ad()
 		applovin.show_interstitial(ad_unit)
 	elseif selected_ad_type == "Rewarded" then
 		applovin.show_rewarded_ad(ad_unit)
-	elseif selected_ad_type == "MRec" then
-		applovin.show_mrec(ad_unit)
 	elseif selected_ad_type == "Banner" then
 		applovin.show_banner(ad_unit)
+	elseif selected_ad_type == "MRec" then
+		applovin.show_mrec(ad_unit)
 	end
 end
 
@@ -77,8 +77,9 @@ function M.setup(ad_type)
 	gui.set_text(ui_components.ad_type_text, ad_type)
 end
 
-function M.load_button_clicked()
+function M.on_load_button_clicked()
 	if gui.get_text(ui_components.load_button_label) == "Load" then
+		isShowingAd = false
 		load_ad()
 		gui.set_enabled(ui_components.loading_text, true)
 		gui.set_enabled(ui_components.load_button, false)
@@ -97,11 +98,13 @@ function M.on_ad_loaded(params)
 	end
 end
 
-function M.destroy_current_ad()
-	if selected_ad_type == "MRec" then
-		applovin.destroy_mrec(ad_unit)
-	elseif selected_ad_type == "Banner" then
+function M.on_back_button_clicked()
+	if selected_ad_type == "Banner" then
+		applovin.hide_banner(ad_unit)
 		applovin.destroy_banner(ad_unit)
+	elseif selected_ad_type == "MRec" then
+		applovin.hide_mrec(ad_unit)
+		applovin.destroy_mrec(ad_unit)
 	end
 
 	isShowingAd = false

@@ -44,40 +44,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)trackEvent:(NSString *)event parameters:(NSDictionary<NSString *, NSString *> *)parameters;
 
-#pragma mark - Banners
-
-- (void)createBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)bannerPosition;
-- (void)setBannerBackgroundColorForAdUnitIdentifier:(NSString *)adUnitIdentifier hexColorCode:(NSString *)hexColorCode;
-- (void)setBannerPlacement:(nullable NSString *)placement forAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)setBannerExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
-- (void)updateBannerPosition:(NSString *)bannerPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)showBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)hideBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)destroyBannerWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-
-#pragma mark - MRECs
-
-- (void)createMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)mrecPosition;
-- (void)setMRecPlacement:(nullable NSString *)placement forAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)setMRecExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
-- (void)updateMRecPosition:(NSString *)mrecPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)showMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)hideMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)destroyMRecWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-
 #pragma mark - Interstitials
 
-- (void)loadInterstitialWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (BOOL)isInterstitialReadyWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)showInterstitialWithAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement;
+- (void)loadInterstitialForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (BOOL)isInterstitialReadyForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)showInterstitialForAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement;
 - (void)setInterstitialExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(NSString *)value;
 
 #pragma mark - Rewarded
 
-- (void)loadRewardedAdWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (BOOL)isRewardedAdReadyWithAdUnitIdentifier:(NSString *)adUnitIdentifier;
-- (void)showRewardedAdWithAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement;
+- (void)loadRewardedAdForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (BOOL)isRewardedAdReadyForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)showRewardedAdForAdUnitIdentifier:(NSString *)adUnitIdentifier placement:(NSString *)placement;
 - (void)setRewardedAdExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
+
+#pragma mark - Banners
+
+- (void)createBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)bannerPosition;
+- (void)setBannerBackgroundColorForAdUnitIdentifier:(NSString *)adUnitIdentifier hexColorCode:(NSString *)hexColorCode;
+- (void)setBannerPlacement:(nullable NSString *)placement forAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)setBannerExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
+- (void)updateBannerPosition:(NSString *)bannerPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)showBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)hideBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)destroyBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+
+#pragma mark - MRECs
+
+- (void)createMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier atPosition:(NSString *)mrecPosition;
+- (void)setMRecPlacement:(nullable NSString *)placement forAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)setMRecExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
+- (void)updateMRecPosition:(NSString *)mrecPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)showMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)hideMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)destroyMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 
 @end
 

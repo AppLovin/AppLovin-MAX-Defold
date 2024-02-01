@@ -4,26 +4,13 @@
 
 namespace dmAppLovin {
 
-// The same constants/enums are in MaxDefoldPlugin.java
-// If you change enums here, pls make sure you update the constants there as well
-
-// enum 
-// {
-// };
-
 void Initialize_Ext(const char* version, const char* extVersion);
-
-void OnResume();
-
-void OnPause();
-
-// AppLovin SDK
 
 void Initialize(const char* sdkKey);
 
-void ShowMediationDebugger();
-
 bool IsInitialized();
+
+void ShowMediationDebugger();
 
 void SetHasUserConsent(bool hasUserConsent);
 
@@ -67,6 +54,22 @@ void SetTestDeviceAdvertisingIds(const char** advertisingIds, int count);
 
 void TrackEvent(const char* event, const char* parameters);
 
+void LoadInterstitial(const char* adUnitId);
+
+bool IsInterstitialReady(const char* adUnitId);
+
+void ShowInterstitial(const char* adUnitId);
+
+void SetInterstitialExtraParameter(const char* adUnitId, const char* key, const char* value);
+
+void LoadRewardedAd(const char* adUnitId);
+
+bool IsRewardedAdReady(const char* adUnitId);
+
+void ShowRewardedAd(const char* adUnitId);
+
+void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value);
+
 void CreateBanner(const char* adUnitId, const char* bannerPosition);
 
 void SetBannerBackgroundColor(const char* adUnitId, const char* hexColorCode);
@@ -96,20 +99,6 @@ void ShowMRec(const char* adUnitId);
 void HideMRec(const char* adUnitId);
 
 void DestroyMRec(const char* adUnitId);
-
-void LoadInterstitial(const char* adUnitId);
-
-void ShowInterstitial(const char* adUnitId);
-
-bool IsInterstitialReady(const char* adUnitId);
-
-void LoadRewardedAd(const char* adUnitId);
-
-bool IsRewardedAdReady(const char* adUnitId);
-
-void ShowRewardedAd(const char* adUnitId);
-
-void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value);
 
 } //namespace dmAppLovin
 

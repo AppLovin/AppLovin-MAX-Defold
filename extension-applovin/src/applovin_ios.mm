@@ -8,6 +8,7 @@
 namespace dmAppLovin {
 
 static MADefoldPlugin *iosPlugin;
+static NSString *const kPluginVersion = @"1.0.0";
 
 void Initialize_Ext(const char* version, const char* extVersion)
 {
@@ -15,30 +16,19 @@ void Initialize_Ext(const char* version, const char* extVersion)
     iosPlugin = [[MADefoldPlugin alloc] initWithView: window.rootViewController.view];
 }
 
-void OnResume()
-{
-    // no-op
-}
-
-void OnPause()
-{
-    // no-op
-}
-
 void Initialize(const char* sdkKey)
 {
-    const char *pluginVersion = "1.0.0";
-    [iosPlugin initialize: [NSString stringWithUTF8String: pluginVersion] sdkKey: [NSString stringWithUTF8String: sdkKey]];
-}
-
-void ShowMediationDebugger()
-{
-    [iosPlugin showMediationDebugger];
+    [iosPlugin initialize: kPluginVersion sdkKey: [NSString stringWithUTF8String: sdkKey]];
 }
 
 bool IsInitialized()
 {
     return [iosPlugin isInitialized];
+}
+
+void ShowMediationDebugger()
+{
+    [iosPlugin showMediationDebugger];
 }
 
 void SetHasUserConsent(bool hasUserConsent)
@@ -151,29 +141,73 @@ void TrackEvent(const char* event, const char* parameters)
                parameters: [NSDictionary dictionary]];
 }
 
+void LoadInterstitial(const char* adUnitId)
+{
+    [iosPlugin loadInterstitialForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+bool IsInterstitialReady(const char* adUnitId)
+{
+    return [iosPlugin isInterstitialReadyForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+void ShowInterstitial(const char* adUnitId)
+{
+    [iosPlugin showInterstitialForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
+}
+
+void SetInterstitialAdExtraParameter(const char* adUnitId, const char* key, const char* value)
+{
+    [iosPlugin setInterstitialExtraParameterForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
+                                                            key: [NSString stringWithUTF8String: key]
+                                                          value: [NSString stringWithUTF8String: value]];
+}
+
+void LoadRewardedAd(const char* adUnitId)
+{
+    [iosPlugin loadRewardedAdForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+bool IsRewardedAdReady(const char* adUnitId)
+{
+    return [iosPlugin isRewardedAdReadyForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+void ShowRewardedAd(const char* adUnitId)
+{
+    [iosPlugin showRewardedAdForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
+}
+
+void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
+{
+    [iosPlugin setRewardedAdExtraParameterForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
+                                                          key: [NSString stringWithUTF8String: key]
+                                                        value: [NSString stringWithUTF8String: value]];
+}
+
 void CreateBanner(const char* adUnitId, const char* bannerPosition)
 {
-    [iosPlugin createBannerWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-             atPosition: [NSString stringWithUTF8String: bannerPosition]];
+    [iosPlugin createBannerForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
+                                    atPosition: [NSString stringWithUTF8String: bannerPosition]];
 }
 
 void SetBannerBackgroundColor(const char* adUnitId, const char* hexColorCode)
 {
     [iosPlugin setBannerBackgroundColorForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-                           hexColorCode: [NSString stringWithUTF8String: hexColorCode]];
+                                              hexColorCode: [NSString stringWithUTF8String: hexColorCode]];
 }
 
 void SetBannerPlacement(const char* adUnitId, const char* placement)
 {
     [iosPlugin setBannerPlacement: [NSString stringWithUTF8String: placement]
-                        forAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+              forAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void SetBannerExtraParameter(const char* adUnitId, const char* key, const char* value)
 {
     [iosPlugin setBannerExtraParameterForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-                                   key: [NSString stringWithUTF8String: key]
-                                 value: [NSString stringWithUTF8String: value]];
+                                                      key: [NSString stringWithUTF8String: key]
+                                                    value: [NSString stringWithUTF8String: value]];
 }
 
 void UpdateBannerPosition(const char* adUnitId, const char* bannerPosition)
@@ -184,23 +218,23 @@ void UpdateBannerPosition(const char* adUnitId, const char* bannerPosition)
 
 void ShowBanner(const char* adUnitId)
 {
-    [iosPlugin showBannerWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+    [iosPlugin showBannerForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void HideBanner(const char* adUnitId)
 {
-    [iosPlugin hideBannerWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+    [iosPlugin hideBannerForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void DestroyBanner(const char* adUnitId)
 {
-    [iosPlugin destroyBannerWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+    [iosPlugin destroyBannerForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void CreateMRec(const char* adUnitId, const char* mrecPosition)
 {
-    [iosPlugin createMRecWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-                                   atPosition: [NSString stringWithUTF8String: mrecPosition]];
+    [iosPlugin createMRecForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
+                                  atPosition: [NSString stringWithUTF8String: mrecPosition]];
 }
 
 void SetMRecPlacement(const char* adUnitId, const char* placement)
@@ -212,8 +246,8 @@ void SetMRecPlacement(const char* adUnitId, const char* placement)
 void SetMRecExtraParameter(const char* adUnitId, const char* key, const char* value)
 {
     [iosPlugin setMRecExtraParameterForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-                                 key: [NSString stringWithUTF8String: key]
-                               value: [NSString stringWithUTF8String: value]];
+                                                    key: [NSString stringWithUTF8String: key]
+                                                  value: [NSString stringWithUTF8String: value]];
 }
 
 void UpdateMRecPosition(const char* adUnitId, const char* mrecPosition)
@@ -224,54 +258,17 @@ void UpdateMRecPosition(const char* adUnitId, const char* mrecPosition)
 
 void ShowMRec(const char* adUnitId)
 {
-    [iosPlugin showMRecWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+    [iosPlugin showMRecForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void HideMRec(const char* adUnitId)
 {
-    [iosPlugin hideMRecWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+    [iosPlugin hideMRecForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void DestroyMRec(const char* adUnitId)
 {
-    [iosPlugin destroyMRecWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
-}
-
-void LoadInterstitial(const char* adUnitId)
-{
-    [iosPlugin loadInterstitialWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
-}
-
-void ShowInterstitial(const char* adUnitId)
-{
-    [iosPlugin showInterstitialWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
-}
-
-bool IsInterstitialReady(const char* adUnitId)
-{
-    return [iosPlugin isInterstitialReadyWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
-}
-
-void LoadRewardedAd(const char* adUnitId)
-{
-    [iosPlugin loadRewardedAdWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
-}
-
-bool IsRewardedAdReady(const char* adUnitId)
-{
-    return [iosPlugin isRewardedAdReadyWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
-}
-
-void ShowRewardedAd(const char* adUnitId)
-{
-    [iosPlugin showRewardedAdWithAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
-}
-
-void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
-{
-    [iosPlugin setRewardedAdExtraParameterForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]
-                                       key: [NSString stringWithUTF8String: key]
-                                     value: [NSString stringWithUTF8String: value]];
+    [iosPlugin destroyMRecForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 } //namespace dmAppLovin
