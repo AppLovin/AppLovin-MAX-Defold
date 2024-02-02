@@ -1,0 +1,30 @@
+[bootstrap]
+main_collection = /example/main.collectionc
+
+[script]
+shared_state = 1
+
+[display]
+width = 720
+height = 1280
+
+[project]
+title = AppLovinMAXDefoldDemo
+version = 1.0.0
+bundle_resources = /extension-applovin/res/ios
+dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
+
+[library]
+include_dirs = extension-applovin
+
+[android]
+package = YOUR_PACKAGE_NAME
+minimum_sdk_version = 21
+debuggable = 1
+
+[ios]
+bundle_identifier = YOUR_BUNDLE_IDENTIFIER
+
+[applovin]
+ios_user_tracking_usage_description = 
+

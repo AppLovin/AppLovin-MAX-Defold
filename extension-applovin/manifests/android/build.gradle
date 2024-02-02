@@ -1,0 +1,10 @@
+// Please see https://dash.applovin.com/documentation/mediation/defold/mediation-adapters/android for integrating mediated networks.
+// Repos
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.applovin:applovin-sdk:12.1.0'
+}
