@@ -1,0 +1,103 @@
+if not applovin then
+    error("Extension works only on iOS and Android")
+    return
+end
+
+local log = require("example.log")
+local ui = require("example.ui")
+local ads = require("example.ads")
+local callback = require("example.callback")
+local dirtylarry = require("dirtylarry.dirtylarry")
+
+local SDK_KEY = "YOUR_SDK_KEY_HERE"
+
+local data = {
+    ["main_page"] = { type = "page",
+        ["mediation_debugger"] = {},
+        ["interstitial"] = {},
+        ["rewarded"] = {},
+        ["banner"] = {},
+        ["mrec"] = {},
+    },
+    ["ads_page"] = { type = "page",
+        ["back"] = {},
+        ["load"] = {},
+    }
+}
+
+local actions = {}
+
+actions.back = function(self, el)
+    ads.on_back_button_clicked()
+    
+    ui.disable_all(self.ui, "page")
+    ui.enable(self.ui.main_page, true)
+    ui.enable(self.ui.back, false)
+end
+
+actions.mediation_debugger = function(self, el)
+    applovin.show_mediation_debugger()
+end
+
+actions.interstitial = function(self, el)
+    setup_ads_page(self, "Interstitial")
+end
+
+actions.rewarded = function(self, el)
+    setup_ads_page(self, "Rewarded")
+end
+
+actions.banner = function(self, el)
+    setup_ads_page(self, "Banner")
+end
+
+actions.mrec = function(self, el)
+    setup_ads_page(self, "MRec")
+end
+
+actions.load = function(self, el)
+    ads.on_load_button_clicked()
+end
+
+function setup_ads_page(self, ad_type)
+    ui.disable_all(self.ui, "page")
+    ui.enable(self.ui.ads_page, true)
+    ui.enable(self.ui.back, true)
+
+    ads.setup(ad_type)
+end
+
+function init(self)    
+    self.console = gui.get_node("console")
+    self.ui = ui.fill_tree(data, actions)
+    
+    ui.enable(self.ui.main_page, true)
+    ui.enable(self.ui.back, false) 
+
+    msg.post(".", "acquire_input_focus")
+
+    callback.set()
+
+    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
+
+    -- MAX Consent Flow - https://dash.applovin.com/documentation/mediation/defold/getting-started/terms-and-privacy-policy-flow
+    applovin.set_terms_and_privacy_policy_flow_enabled(true)
+    applovin.set_privacy_policy_url("https://your_company_name.com/privacy/") -- mandatory
+    applovin.set_terms_of_service_url("https://your_company_name.com/terms/") -- optional
+
+    applovin.initialize(SDK_KEY)
+end
+
+function update(self, dt)
+    log.update(self.console)
+end
+
+function on_input(self, action_id, action)
+    for name, el in pairs(self.ui) do
+        if ui.is_button(el) and ui.is_enabled(el) then
+            dirtylarry:button(el.name, action_id, action, function()
+                actions[el.name](self, el)
+            end)
+        end
+    end
+end

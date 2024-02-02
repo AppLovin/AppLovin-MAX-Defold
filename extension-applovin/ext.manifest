@@ -1,0 +1,24 @@
+name: "AppLovinExt"
+
+platforms:
+    ios:
+        context:
+            frameworks: [
+                "AdSupport",
+                "AudioToolbox",
+                "AVFoundation",
+                "CFNetwork",
+                "CoreGraphics",
+                "CoreMedia",
+                "CoreMotion",
+                "CoreTelephony",
+                "MessageUI",
+                "SafariServices",
+                "StoreKit",
+                "SystemConfiguration",
+                "UIKit",
+                "WebKit"    
+            ]
+            weakFrameworks: ["AppTrackingTransparency"]
+            libs: ["z"]
+            linkFlags: ["-ObjC", "-Wl,-rpath,/usr/lib/swift", "-Wl,-rpath,@executable_path/Frameworks"]

@@ -1,0 +1,8 @@
+# Please see https://dash.applovin.com/documentation/mediation/defold/mediation-adapters/ios for integrating mediated networks.
+# Sources
+source 'https://cdn.cocoapods.org/'
+
+# Settings
+inhibit_all_warnings!
+
+pod 'AppLovinSDK', '12.1.0'
