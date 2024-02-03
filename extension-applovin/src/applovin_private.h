@@ -58,7 +58,7 @@ void LoadInterstitial(const char* adUnitId);
 
 bool IsInterstitialReady(const char* adUnitId);
 
-void ShowInterstitial(const char* adUnitId);
+void ShowInterstitial(const char* adUnitId, const char* placement);
 
 void SetInterstitialExtraParameter(const char* adUnitId, const char* key, const char* value);
 
@@ -66,7 +66,7 @@ void LoadRewardedAd(const char* adUnitId);
 
 bool IsRewardedAdReady(const char* adUnitId);
 
-void ShowRewardedAd(const char* adUnitId);
+void ShowRewardedAd(const char* adUnitId, const char* placement);
 
 void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value);
 
@@ -79,6 +79,10 @@ void SetBannerPlacement(const char* adUnitId, const char* placement);
 void SetBannerExtraParameter(const char* adUnitId, const char* key, const char* value);
 
 void UpdateBannerPosition(const char* adUnitId, const char* bannerPosition);
+
+void StartBannerAutoRefresh(const char* adUnitId);
+
+void StopBannerAutoRefresh(const char* adUnitId);
 
 void ShowBanner(const char* adUnitId);
 
@@ -93,6 +97,10 @@ void SetMRecPlacement(const char* adUnitId, const char* placement);
 void SetMRecExtraParameter(const char* adUnitId, const char* key, const char* value);
 
 void UpdateMRecPosition(const char* adUnitId, const char* mrecPosition);
+
+void StartMRecAutoRefresh(const char* adUnitId);
+
+void StopMRecAutoRefresh(const char* adUnitId);
 
 void ShowMRec(const char* adUnitId);
 

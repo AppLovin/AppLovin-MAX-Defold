@@ -57,6 +57,8 @@ struct AppLovin
     jmethodID m_SetBannerPlacement;
     jmethodID m_SetBannerExtraParameter;
     jmethodID m_UpdateBannerPosition;
+    jmethodID m_StartBannerAutoRefresh;
+    jmethodID m_StopBannerAutoRefresh;
     jmethodID m_ShowBanner;
     jmethodID m_HideBanner;
     jmethodID m_DestroyBanner;
@@ -64,6 +66,8 @@ struct AppLovin
     jmethodID m_SetMRecPlacement;
     jmethodID m_SetMRecExtraParameter;
     jmethodID m_UpdateMRecPosition;
+    jmethodID m_StartMRecAutoRefresh;
+    jmethodID m_StopMRecAutoRefresh;
     jmethodID m_ShowMRec;
     jmethodID m_HideMRec;
     jmethodID m_DestroyMRec;
@@ -206,17 +210,19 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_TrackEvent = env->GetMethodID(cls, "trackEvent", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_LoadInterstitial = env->GetMethodID(cls, "loadInterstitial", "(Ljava/lang/String;)V");
     g_applovin.m_IsInterstitialReady = env->GetMethodID(cls, "isInterstitialReady", "(Ljava/lang/String;)Z");
-    g_applovin.m_ShowInterstitial = env->GetMethodID(cls, "showInterstitial", "(Ljava/lang/String;)V");
+    g_applovin.m_ShowInterstitial = env->GetMethodID(cls, "showInterstitial", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetInterstitialExtraParameter = env->GetMethodID(cls, "setInterstitialExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_LoadRewardedAd = env->GetMethodID(cls, "loadRewardedAd", "(Ljava/lang/String;)V");
     g_applovin.m_IsRewardedAdReady = env->GetMethodID(cls, "isRewardedAdReady", "(Ljava/lang/String;)Z");
-    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;)V");
+    g_applovin.m_ShowRewardedAd = env->GetMethodID(cls, "showRewardedAd", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetRewardedAdExtraParameter = env->GetMethodID(cls, "setRewardedAdExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_CreateBanner = env->GetMethodID(cls, "createBanner", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetBannerBackgroundColor = env->GetMethodID(cls, "setBannerBackgroundColor", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetBannerPlacement = env->GetMethodID(cls, "setBannerPlacement", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetBannerExtraParameter = env->GetMethodID(cls, "setBannerExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_UpdateBannerPosition = env->GetMethodID(cls, "updateBannerPosition", "(Ljava/lang/String;Ljava/lang/String;)V");
+    g_applovin.m_StartBannerAutoRefresh = env->GetMethodID(cls, "startBannerAutoRefresh", "(Ljava/lang/String;)V");
+    g_applovin.m_StopBannerAutoRefresh = env->GetMethodID(cls, "stopBannerAutoRefresh", "(Ljava/lang/String;)V");
     g_applovin.m_ShowBanner = env->GetMethodID(cls, "showBanner", "(Ljava/lang/String;)V");
     g_applovin.m_HideBanner = env->GetMethodID(cls, "hideBanner", "(Ljava/lang/String;)V");
     g_applovin.m_DestroyBanner = env->GetMethodID(cls, "destroyBanner", "(Ljava/lang/String;)V");
@@ -224,6 +230,8 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_SetMRecPlacement = env->GetMethodID(cls, "setMRecPlacement", "(Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_SetMRecExtraParameter = env->GetMethodID(cls, "setMRecExtraParameter", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     g_applovin.m_UpdateMRecPosition = env->GetMethodID(cls, "updateMRecPosition", "(Ljava/lang/String;Ljava/lang/String;)V");
+    g_applovin.m_StartMRecAutoRefresh = env->GetMethodID(cls, "startMRecAutoRefresh", "(Ljava/lang/String;)V");
+    g_applovin.m_StopMRecAutoRefresh = env->GetMethodID(cls, "stopMRecAutoRefresh", "(Ljava/lang/String;)V");
     g_applovin.m_ShowMRec = env->GetMethodID(cls, "showMRec", "(Ljava/lang/String;)V");
     g_applovin.m_HideMRec = env->GetMethodID(cls, "hideMRec", "(Ljava/lang/String;)V");
     g_applovin.m_DestroyMRec = env->GetMethodID(cls, "destroyMRec", "(Ljava/lang/String;)V");
@@ -382,9 +390,9 @@ bool IsInterstitialReady(const char* adUnitId)
     return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsInterstitialReady, adUnitId);
 }
 
-void ShowInterstitial(const char* adUnitId)
+void ShowInterstitial(const char* adUnitId, const char* placement)
 {
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowInterstitial, adUnitId);
+    CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowInterstitial, adUnitId, placement);
 }
 
 void SetInterstitialExtraParameter(const char* adUnitId, const char* key, const char* value)
@@ -402,9 +410,9 @@ bool IsRewardedAdReady(const char* adUnitId)
     return CallBoolMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsRewardedAdReady, adUnitId);
 }
 
-void ShowRewardedAd(const char* adUnitId)
+void ShowRewardedAd(const char* adUnitId, const char* placement)
 {
-    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowRewardedAd, adUnitId);
+    CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_ShowRewardedAd, adUnitId, placement);
 }
 
 void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
@@ -435,6 +443,16 @@ void SetBannerExtraParameter(const char* adUnitId, const char* key, const char* 
 void UpdateBannerPosition(const char* adUnitId, const char* bannerPosition)
 {
     CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_UpdateBannerPosition, adUnitId, bannerPosition);
+}
+
+void StartBannerAutoRefresh(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_StartBannerAutoRefresh, adUnitId);
+}
+
+void StopBannerAutoRefresh(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_StopBannerAutoRefresh, adUnitId);
 }
 
 void ShowBanner(const char* adUnitId)
@@ -470,6 +488,16 @@ void SetMRecExtraParameter(const char* adUnitId, const char* key, const char* va
 void UpdateMRecPosition(const char* adUnitId, const char* mrecPosition)
 {
     CallVoidMethodCharChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_UpdateMRecPosition, adUnitId, mrecPosition);
+}
+
+void StartMRecAutoRefresh(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_StartMRecAutoRefresh, adUnitId);
+}
+
+void StopMRecAutoRefresh(const char* adUnitId)
+{
+    CallVoidMethodChar(g_applovin.m_MaxDefoldPlugin, g_applovin.m_StopMRecAutoRefresh, adUnitId);
 }
 
 void ShowMRec(const char* adUnitId)
