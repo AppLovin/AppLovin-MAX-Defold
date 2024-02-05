@@ -151,9 +151,9 @@ bool IsInterstitialReady(const char* adUnitId)
     return [iosPlugin isInterstitialReadyForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
-void ShowInterstitial(const char* adUnitId)
+void ShowInterstitial(const char* adUnitId, const char* placement)
 {
-    [iosPlugin showInterstitialForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
+    [iosPlugin showInterstitialForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: [NSString stringWithUTF8String: placement]];
 }
 
 void SetInterstitialAdExtraParameter(const char* adUnitId, const char* key, const char* value)
@@ -173,9 +173,9 @@ bool IsRewardedAdReady(const char* adUnitId)
     return [iosPlugin isRewardedAdReadyForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
-void ShowRewardedAd(const char* adUnitId)
+void ShowRewardedAd(const char* adUnitId, const char* placement)
 {
-    [iosPlugin showRewardedAdForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: nil];
+    [iosPlugin showRewardedAdForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId] placement: [NSString stringWithUTF8String: placement]];
 }
 
 void SetRewardedAdExtraParameter(const char* adUnitId, const char* key, const char* value)
@@ -216,6 +216,16 @@ void UpdateBannerPosition(const char* adUnitId, const char* bannerPosition)
                 forAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
+void StartBannerAutoRefresh(const char* adUnitId)
+{
+    [iosPlugin startBannerAutoRefreshForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+void StopBannerAutoRefresh(const char* adUnitId)
+{
+    [iosPlugin stopBannerAutoRefreshForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
 void ShowBanner(const char* adUnitId)
 {
     [iosPlugin showBannerForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
@@ -254,6 +264,16 @@ void UpdateMRecPosition(const char* adUnitId, const char* mrecPosition)
 {
     [iosPlugin updateMRecPosition: [NSString stringWithUTF8String: mrecPosition]
               forAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+void StartMRecAutoRefresh(const char* adUnitId)
+{
+    [iosPlugin startMRecAutoRefreshForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
+}
+
+void StopMRecAutoRefresh(const char* adUnitId)
+{
+    [iosPlugin stopMRecAutoRefreshForAdUnitIdentifier: [NSString stringWithUTF8String: adUnitId]];
 }
 
 void ShowMRec(const char* adUnitId)

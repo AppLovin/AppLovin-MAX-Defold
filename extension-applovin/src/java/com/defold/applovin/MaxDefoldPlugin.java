@@ -235,12 +235,9 @@ public class MaxDefoldPlugin
         if ( sdkConfiguration != null )
         {
             JsonUtils.putString( message, "countryCode", sdkConfiguration.getCountryCode() );
+            JsonUtils.putInt( message, "consentFlowUserGeography", sdkConfiguration.getConsentFlowUserGeography().ordinal() );
+            JsonUtils.putBoolean( message, "isTestModeEnabled", sdkConfiguration.isTestModeEnabled() );
         }
-
-        JsonUtils.putBoolean( message, "hasUserConsent", AppLovinPrivacySettings.hasUserConsent( context ) );
-        JsonUtils.putBoolean( message, "isAgeRestrictedUser", AppLovinPrivacySettings.isAgeRestrictedUser( context ) );
-        JsonUtils.putBoolean( message, "isDoNotSell", AppLovinPrivacySettings.isDoNotSell( context ) );
-        JsonUtils.putBoolean( message, "isTablet", AppLovinSdkUtils.isTablet( context ) );
 
         return message;
     }
@@ -457,10 +454,10 @@ public class MaxDefoldPlugin
         return interstitial.isReady();
     }
 
-    public void showInterstitial(final String adUnitId)
+    public void showInterstitial(final String adUnitId, final String placement)
     {
         MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.showAd();
+        interstitial.showAd( placement );
     }
 
     public void setInterstitialExtraParameter(final String adUnitId, final String key, final String value)
@@ -483,10 +480,10 @@ public class MaxDefoldPlugin
         return rewardedAd.isReady();
     }
 
-    public void showRewardedAd(final String adUnitId)
+    public void showRewardedAd(final String adUnitId, final String placement)
     {
         MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.showAd();
+        rewardedAd.showAd( placement );
     }
 
     public void setRewardedAdExtraParameter(final String adUnitId, final String key, final String value)
@@ -520,6 +517,16 @@ public class MaxDefoldPlugin
     public void updateBannerPosition(final String adUnitId, final String bannerPosition)
     {
         updateAdViewPosition( adUnitId, bannerPosition, getDeviceSpecificBannerAdViewAdFormat() );
+    }
+
+    public void startBannerAutoRefresh(final String adUnitId)
+    {
+        startAutoRefresh( adUnitId, getDeviceSpecificBannerAdViewAdFormat() );
+    }
+
+    public void stopBannerAutoRefresh(final String adUnitId)
+    {
+        stopAutoRefresh( adUnitId, getDeviceSpecificBannerAdViewAdFormat() );
     }
 
     public void showBanner(final String adUnitId)
@@ -557,6 +564,16 @@ public class MaxDefoldPlugin
     public void updateMRecPosition(final String adUnitId, final String mrecPosition)
     {
         updateAdViewPosition( adUnitId, mrecPosition, MaxAdFormat.MREC );
+    }
+
+    public void startMRecAutoRefresh(final String adUnitId)
+    {
+        startAutoRefresh( adUnitId, MaxAdFormat.MREC );
+    }
+
+    public void stopMRecAutoRefresh(final String adUnitId)
+    {
+        stopAutoRefresh( adUnitId, MaxAdFormat.MREC );
     }
 
     public void showMRec(final String adUnitId)
@@ -1072,6 +1089,34 @@ public class MaxDefoldPlugin
                 }
             }
         } );
+    }
+
+    private void startAutoRefresh(final String adUnitId, final MaxAdFormat adFormat)
+    {
+        d( "Starting auto refresh " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
+
+        final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+        if ( adView == null )
+        {
+            e( adFormat.getLabel() + " does not exist" );
+            return;
+        }
+
+        adView.startAutoRefresh();
+    }
+
+    private void stopAutoRefresh(final String adUnitId, final MaxAdFormat adFormat)
+    {
+        d( "Stopping auto refresh " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
+
+        final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+        if ( adView == null )
+        {
+            e( adFormat.getLabel() + " does not exist" );
+            return;
+        }
+
+        adView.stopAutoRefresh();
     }
 
     private void logInvalidAdFormat(MaxAdFormat adFormat)

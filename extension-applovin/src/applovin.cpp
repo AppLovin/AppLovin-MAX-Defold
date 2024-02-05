@@ -251,7 +251,8 @@ static int Lua_ShowInterstitial(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     const char* lua_adUnitId = luaL_checkstring(L, 1);
-    ShowInterstitial(lua_adUnitId);
+    const char* lua_placement = luaL_optstring(L, 2, "");
+    ShowInterstitial(lua_adUnitId, lua_placement);
     return 0;
 }
 
@@ -286,7 +287,8 @@ static int Lua_ShowRewardedAd(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     const char* adUnitId = luaL_checkstring(L, 1);
-    ShowRewardedAd(adUnitId);
+    const char* lua_placement = luaL_optstring(L, 2, "");
+    ShowRewardedAd(adUnitId, lua_placement);
     return 0;
 }
 
@@ -343,6 +345,22 @@ static int Lua_UpdateBannerPosition(lua_State* L)
     const char* adUnitId = luaL_checkstring(L, 1);
     const char* bannerPosition = luaL_checkstring(L, 2);
     UpdateBannerPosition(adUnitId, bannerPosition);
+    return 0;
+}
+
+static int Lua_StartBannerAutoRefresh(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    StartBannerAutoRefresh(adUnitId);
+    return 0;
+}
+
+static int Lua_StopBannerAutoRefresh(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    StopBannerAutoRefresh(adUnitId);
     return 0;
 }
 
@@ -404,6 +422,22 @@ static int Lua_UpdateMRecPosition(lua_State* L)
     const char* adUnitId = luaL_checkstring(L, 1);
     const char* mrecPosition = luaL_checkstring(L, 2);
     UpdateMRecPosition(adUnitId, mrecPosition);
+    return 0;
+}
+
+static int Lua_StartMRecAutoRefresh(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    StartMRecAutoRefresh(adUnitId);
+    return 0;
+}
+
+static int Lua_StopMRecAutoRefresh(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char* adUnitId = luaL_checkstring(L, 1);
+    StopMRecAutoRefresh(adUnitId);
     return 0;
 }
 
@@ -470,6 +504,8 @@ static const luaL_reg Module_methods[] =
     {"set_banner_placement", Lua_SetBannerPlacement},
     {"set_banner_extra_parameter", Lua_SetBannerExtraParameter},
     {"update_banner_position", Lua_UpdateBannerPosition},
+    {"start_banner_auto_refresh", Lua_StartBannerAutoRefresh},
+    {"stop_banner_auto_refresh", Lua_StopBannerAutoRefresh},
     {"show_banner", Lua_ShowBanner},
     {"hide_banner", Lua_HideBanner},
     {"destroy_banner", Lua_DestroyBanner},
@@ -477,6 +513,8 @@ static const luaL_reg Module_methods[] =
     {"set_mrec_placement", Lua_SetMRecPlacement},
     {"set_mrec_extra_parameter", Lua_SetMRecExtraParameter},
     {"update_mrec_position", Lua_UpdateMRecPosition},
+    {"start_mrec_auto_refresh", Lua_StartMRecAutoRefresh},
+    {"stop_mrec_auto_refresh", Lua_StopMRecAutoRefresh},
     {"show_mrec", Lua_ShowMRec},
     {"hide_mrec", Lua_HideMRec},
     {"destroy_mrec", Lua_DestroyMRec},
@@ -488,6 +526,23 @@ static void LuaInit(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     luaL_register(L, MODULE_NAME, Module_methods);
+
+    #define SETCONSTANT(name) \
+    lua_pushnumber(L, (lua_Number) name); \
+    lua_setfield(L, -2, #name); \
+
+    SETCONSTANT(CONSENT_FLOW_USER_GEOGRAPHY_UNKNOWN)
+    SETCONSTANT(CONSENT_FLOW_USER_GEOGRAPHY_GDPR)
+    SETCONSTANT(CONSENT_FLOW_USER_GEOGRAPHY_OTHER)
+
+    SETCONSTANT(APP_TRACKING_TRANSPARENCY_STATUS_UNAVAILABLE)
+    SETCONSTANT(APP_TRACKING_TRANSPARENCY_STATUS_NOT_DETERMINED)
+    SETCONSTANT(APP_TRACKING_TRANSPARENCY_STATUS_RESTRICTED)
+    SETCONSTANT(APP_TRACKING_TRANSPARENCY_STATUS_DENIED)
+    SETCONSTANT(APP_TRACKING_TRANSPARENCY_STATUS_AUTHORIZED)
+
+    #undef SETCONSTANT
+    
     lua_pop(L, 1);
 }
 

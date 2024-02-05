@@ -196,18 +196,15 @@ static NSString *const TAG = @"MADefoldPlugin";
 
 - (NSDictionary<NSString *, id> *)initializationMessage
 {
-    NSMutableDictionary<NSString *, id> *message = [NSMutableDictionary dictionaryWithCapacity: 6];
+    NSMutableDictionary<NSString *, id> *message = [NSMutableDictionary dictionaryWithCapacity: 4];
     
     if ( self.sdkConfiguration )
     {
-        message[@"appTrackingStatus"] = @(self.sdkConfiguration.appTrackingTransparencyStatus);
         message[@"countryCode"] = self.sdkConfiguration.countryCode;
+        message[@"appTrackingStatus"] = @(self.sdkConfiguration.appTrackingTransparencyStatus);
+        message[@"consentFlowUserGeography"] = @(self.sdkConfiguration.consentFlowUserGeography);
+        message[@"isTestModeEnabled"] = @(self.sdkConfiguration.isTestModeEnabled);
     }
-    
-    message[@"hasUserConsent"] = @([ALPrivacySettings hasUserConsent]);
-    message[@"isAgeRestrictedUser"] = @([ALPrivacySettings isAgeRestrictedUser]);
-    message[@"isDoNotSell"] = @([ALPrivacySettings isDoNotSell]);
-    message[@"isTablet"] = @([self isTablet]);
     
     return message;
 }
@@ -483,6 +480,16 @@ static NSString *const TAG = @"MADefoldPlugin";
     [self updateAdViewPosition: bannerPosition forAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
 }
 
+- (void)startBannerAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    [self startAutoRefresh: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
+}
+
+- (void)stopBannerAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    [self stopAutoRefresh: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
+}
+
 - (void)showBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
     [self showAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: DEVICE_SPECIFIC_ADVIEW_AD_FORMAT];
@@ -518,6 +525,16 @@ static NSString *const TAG = @"MADefoldPlugin";
 - (void)updateMRecPosition:(NSString *)mrecPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier
 {
     [self updateAdViewPosition: mrecPosition forAdUnitIdentifier: adUnitIdentifier adFormat: MAAdFormat.mrec];
+}
+
+- (void)startMRecAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    [self startAutoRefresh: adUnitIdentifier adFormat: MAAdFormat.mrec];
+}
+
+- (void)stopMRecAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier
+{
+    [self stopAutoRefresh: adUnitIdentifier adFormat: MAAdFormat.mrec];
 }
 
 - (void)showMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier
@@ -857,6 +874,39 @@ static NSString *const TAG = @"MADefoldPlugin";
             self.adViewAdFormats[adUnitIdentifier] = forcedAdFormat;
             [self positionAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: forcedAdFormat];
         }
+    });
+}
+
+- (void)startAutoRefresh:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
+{
+    dispatchOnMainQueue(^{
+        [self log: @"Starting auto refresh \"%@\" with ad unit identifier \"%@\"", adFormat, adUnitIdentifier];
+
+        MAAdView *view = [self retrieveAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: adFormat];
+        if ( !view )
+        {
+            [self log: @"%@ does not exist for ad unit identifier %@.", adFormat, adUnitIdentifier];
+            return;
+        }
+
+        [view startAutoRefresh];
+    });
+}
+
+- (void)stopAutoRefresh:(NSString *)adUnitIdentifier adFormat:(MAAdFormat *)adFormat
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+
+        [self log: @"Stopping auto refresh \"%@\" with ad unit identifier \"%@\"", adFormat, adUnitIdentifier];
+
+        MAAdView *view = [self retrieveAdViewForAdUnitIdentifier: adUnitIdentifier adFormat: adFormat];
+        if ( !view )
+        {
+            [self log: @"%@ does not exist for ad unit identifier %@.", adFormat, adUnitIdentifier];
+            return;
+        }
+
+        [view stopAutoRefresh];
     });
 }
 

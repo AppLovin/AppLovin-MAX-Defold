@@ -66,6 +66,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setBannerExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
 - (void)updateBannerPosition:(NSString *)bannerPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)showBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)startBannerAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)stopBannerAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)hideBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)destroyBannerForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 
@@ -76,6 +78,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setMRecExtraParameterForAdUnitIdentifier:(NSString *)adUnitIdentifier key:(NSString *)key value:(nullable NSString *)value;
 - (void)updateMRecPosition:(NSString *)mrecPosition forAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)showMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)startMRecAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier;
+- (void)stopMRecAutoRefreshForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)hideMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 - (void)destroyMRecForAdUnitIdentifier:(NSString *)adUnitIdentifier;
 
