@@ -8,7 +8,7 @@
 namespace dmAppLovin {
 
 static MADefoldPlugin *iosPlugin;
-static NSString *const kPluginVersion = @"1.0.0";
+static NSString *const kPluginVersion = @"1.1.0";
 
 void Initialize_Ext(const char* version, const char* extVersion)
 {

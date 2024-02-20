@@ -10,7 +10,7 @@ height = 1280
 
 [project]
 title = AppLovinMAXDefoldDemo
-version = 1.0.0
+version = 1.1.0
 bundle_resources = /extension-applovin/res/ios
 dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
 
