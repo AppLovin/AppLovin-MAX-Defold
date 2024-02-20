@@ -1020,6 +1020,7 @@ public class MaxDefoldPlugin
                 }
 
                 adView.setListener( null );
+                adView.setRevenueListener( null );
                 adView.destroy();
 
                 mAdViews.remove( adUnitId );
@@ -1148,6 +1149,7 @@ public class MaxDefoldPlugin
         {
             result = new MaxInterstitialAd( adUnitId, sdk, getGameActivity() );
             result.setListener( this );
+            result.setRevenueListener( this );
 
             mInterstitials.put( adUnitId, result );
         }
@@ -1162,6 +1164,7 @@ public class MaxDefoldPlugin
         {
             result = MaxRewardedAd.getInstance( adUnitId, sdk, getGameActivity() );
             result.setListener( this );
+            result.setRevenueListener( this );
 
             mRewardedAds.put( adUnitId, result );
         }
@@ -1182,6 +1185,7 @@ public class MaxDefoldPlugin
             // Must explicitly cast the GameActivity to Context to avoid a crash from NoSuchMethodError
             result = new MaxAdView( adUnitId, adFormat, sdk, (Context) getGameActivity() );
             result.setListener( this );
+            result.setRevenueListener( this );
 
             mAdViews.put( adUnitId, result );
             mAdViewPositions.put( adUnitId, adViewPosition );
