@@ -5,4 +5,4 @@ source 'https://cdn.cocoapods.org/'
 # Settings
 inhibit_all_warnings!
 
-pod 'AppLovinSDK', '12.1.0'
+pod 'AppLovinSDK', '12.2.0'
