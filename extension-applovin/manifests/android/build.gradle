@@ -6,5 +6,5 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.applovin:applovin-sdk:12.1.0'
+    implementation 'com.applovin:applovin-sdk:12.2.0'
 }
