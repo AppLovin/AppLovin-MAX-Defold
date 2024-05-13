@@ -1,4 +1,4 @@
-# Please see https://dash.applovin.com/documentation/mediation/defold/mediation-adapters/ios for integrating mediated networks.
+# Please see https://developers.applovin.com/en/defold/preparing-mediated-networks#ios for integrating mediated networks.
 # Sources
 source 'https://cdn.cocoapods.org/'
 

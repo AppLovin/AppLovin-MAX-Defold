@@ -5,7 +5,7 @@ AppLovin MAX Defold Plugin for Android and iOS
 
 ## Documentation
 
-Please check out our [documentation](https://dash.applovin.com/documentation/mediation/defold/getting-started/integration) to get started on integrating and enabling mediated networks using our guides.
+Please check out our [documentation](https://developers.applovin.com/en/defold/overview/integration) to get started on integrating and enabling mediated networks using our guides.
 
 ## Demo App
 

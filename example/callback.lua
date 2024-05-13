@@ -27,7 +27,7 @@ local function applovin_callback(self, name, params)
         ads.on_ad_load_failed(params)
     end
 
-    -- For the full list of events and respective params, please see the main.gui_script file or the MAX documentations at https://dash.applovin.com/documentation/mediation/defold/getting-started/integration
+    -- For the full list of events and respective params, please see the main.gui_script file or the MAX documentation at https://developers.applovin.com/en/defold/overview/integration
 end
 
 function M.set()
