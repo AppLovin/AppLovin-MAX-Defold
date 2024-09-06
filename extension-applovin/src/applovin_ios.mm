@@ -41,16 +41,6 @@ bool HasUserConsent()
     return [iosPlugin hasUserConsent];
 }
 
-void SetIsAgeRestrictedUser(bool isAgeRestrictedUser)
-{
-    [iosPlugin setIsAgeRestrictedUser: isAgeRestrictedUser];
-}
-
-bool IsAgeRestrictedUser()
-{
-    return [iosPlugin isAgeRestrictedUser];
-}
-
 void SetDoNotSell(bool doNotSell)
 {
     [iosPlugin setDoNotSell: doNotSell];

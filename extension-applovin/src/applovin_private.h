@@ -16,10 +16,6 @@ void SetHasUserConsent(bool hasUserConsent);
 
 bool HasUserConsent();
 
-void SetIsAgeRestrictedUser(bool isAgeRestrictedUser);
-
-bool IsAgeRestrictedUser();
-
 void SetDoNotSell(bool doNotSell);
 
 bool IsDoNotSell();

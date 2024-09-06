@@ -221,16 +221,6 @@ static NSString *const TAG = @"MADefoldPlugin";
     return [ALPrivacySettings hasUserConsent];
 }
 
-- (void)setIsAgeRestrictedUser:(BOOL)isAgeRestrictedUser
-{
-    [ALPrivacySettings setIsAgeRestrictedUser: isAgeRestrictedUser];
-}
-
-- (BOOL)isAgeRestrictedUser
-{
-    return [ALPrivacySettings isAgeRestrictedUser];
-}
-
 - (void)setDoNotSell:(BOOL)doNotSell
 {
     [ALPrivacySettings setDoNotSell: doNotSell];

@@ -25,8 +25,6 @@ struct AppLovin
     jmethodID m_ShowMediationDebugger;
     jmethodID m_SetHasUserConsent;
     jmethodID m_HasUserConsent;
-    jmethodID m_SetIsAgeRestrictedUser;
-    jmethodID m_IsAgeRestrictedUser;
     jmethodID m_SetDoNotSell;
     jmethodID m_IsDoNotSell;
     jmethodID m_SetTermsAndPrivacyPolicyFlowEnabled;
@@ -189,8 +187,6 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_IsInitialized = env->GetMethodID(cls, "isInitialized", "()Z");
     g_applovin.m_SetHasUserConsent = env->GetMethodID(cls, "setHasUserConsent", "(Z)V");
     g_applovin.m_HasUserConsent = env->GetMethodID(cls, "hasUserConsent", "()Z");
-    g_applovin.m_SetIsAgeRestrictedUser = env->GetMethodID(cls, "setIsAgeRestrictedUser", "(Z)V");
-    g_applovin.m_IsAgeRestrictedUser = env->GetMethodID(cls, "isAgeRestrictedUser", "()Z");
     g_applovin.m_SetDoNotSell = env->GetMethodID(cls, "setDoNotSell", "(Z)V");
     g_applovin.m_IsDoNotSell = env->GetMethodID(cls, "isDoNotSell", "()Z");
     g_applovin.m_SetTermsAndPrivacyPolicyFlowEnabled = env->GetMethodID(cls, "setTermsAndPrivacyPolicyFlowEnabled", "(Z)V");
@@ -275,16 +271,6 @@ void SetHasUserConsent(bool hasUserConsent)
 bool HasUserConsent()
 {
     return CallBoolMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_HasUserConsent);
-}
-
-void SetIsAgeRestrictedUser(bool isAgeRestrictedUser)
-{
-    CallVoidMethodBool(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetIsAgeRestrictedUser, isAgeRestrictedUser);
-}
-
-bool IsAgeRestrictedUser()
-{
-    return CallBoolMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_IsAgeRestrictedUser);
 }
 
 void SetDoNotSell(bool doNotSell)

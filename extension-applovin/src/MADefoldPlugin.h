@@ -14,8 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)setHasUserConsent:(BOOL)hasUserConsent;
 - (BOOL)hasUserConsent;
-- (void)setIsAgeRestrictedUser:(BOOL)isAgeRestrictedUser;
-- (BOOL)isAgeRestrictedUser;
 - (void)setDoNotSell:(BOOL)doNotSell;
 - (BOOL)isDoNotSell;
 
