@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://developers.applovin.com/en/max/defold/overview/integration
+    about: Documentation for the AppLovin MAX Defold Plugin
+  - name: Support
+    url: https://developers.applovin.com/en/max/faq/common-questions-from-publishers
+    about: Answers to common questions and support for AppLovin MAX
