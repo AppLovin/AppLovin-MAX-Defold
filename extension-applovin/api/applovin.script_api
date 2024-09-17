@@ -114,24 +114,6 @@
 
 #*****************************************************************************************************
 
-  - name: set_is_age_restricted_user
-    type: function
-    desc: Sets whether the user is considered to be in an age-restricted category.
-    parameters:
-    - name: is_age_restricted_user
-      type: boolean
-
-#*****************************************************************************************************
-
-  - name: is_age_restricted_user
-    type: function
-    desc: Checks if the user is considered to be in an age-restricted category.
-    returns:
-    - name: is_age_restricted_user
-      type: boolean
-
-#*****************************************************************************************************
-
   - name: set_do_not_sell
     type: function
     desc: Sets whether the user has chosen to opt out of the sale of their personal information.

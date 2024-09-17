@@ -265,16 +265,6 @@ public class MaxDefoldPlugin
         return AppLovinPrivacySettings.hasUserConsent( getGameActivity() );
     }
 
-    public void setIsAgeRestrictedUser(final boolean isAgeRestrictedUser)
-    {
-        AppLovinPrivacySettings.setIsAgeRestrictedUser( isAgeRestrictedUser, getGameActivity() );
-    }
-
-    public boolean isAgeRestrictedUser()
-    {
-        return AppLovinPrivacySettings.isAgeRestrictedUser( getGameActivity() );
-    }
-
     public void setDoNotSell(final boolean doNotSell)
     {
         AppLovinPrivacySettings.setDoNotSell( doNotSell, getGameActivity() );
