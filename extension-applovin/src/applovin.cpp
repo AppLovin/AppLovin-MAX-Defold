@@ -192,15 +192,30 @@ static int Lua_SetTestDeviceAdvertisingIds(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     luaL_checktype(L, 1, LUA_TTABLE);
-    int count = lua_objlen(L, 1);
-    const char* advertisingIds[count];
-    for (int i = 0; i < count; ++i)
+    const uint32_t count = (uint32_t)lua_objlen(L, 1);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        lua_rawgeti(L, 1, i + 1);
+        const bool isString = lua_type(L, -1) == LUA_TSTRING;
+        lua_pop(L, 1);
+        if (!isString)
+        {
+            return DM_LUA_ERROR(
+                "Expected string at test device advertising ID index %u.",
+                i + 1);
+        }
+    }
+
+    dmArray<const char*> advertisingIds;
+    advertisingIds.SetCapacity(count);
+    advertisingIds.SetSize(count);
+    for (uint32_t i = 0; i < count; ++i)
     {
         lua_rawgeti(L, 1, i + 1);
         advertisingIds[i] = lua_tostring(L, -1);
         lua_pop(L, 1);
     }
-    SetTestDeviceAdvertisingIds(advertisingIds, count);
+    SetTestDeviceAdvertisingIds(advertisingIds.Begin(), (int)count);
     return 0;
 }
 
@@ -208,6 +223,10 @@ static int Lua_TrackEvent(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     const char* event = luaL_checkstring(L, 1);
+    if (event[0] == '\0')
+    {
+        return DM_LUA_ERROR("event_name must be a non-empty string.");
+    }
     const char* parameters = luaL_checkstring(L, 2);
     TrackEvent(event, parameters);
     return 0;
@@ -476,7 +495,7 @@ static const luaL_reg Module_methods[] =
     {"load_interstitial", Lua_LoadInterstitial},
     {"is_interstitial_ready", Lua_IsInterstitialReady},
     {"show_interstitial", Lua_ShowInterstitial},
-    {"set_interstitial_extra_parameter", Lua_SetRewardedAdExtraParameter},
+    {"set_interstitial_extra_parameter", Lua_SetInterstitialExtraParameter},
     {"load_rewarded_ad", Lua_LoadRewardedAd},
     {"is_rewarded_ad_ready", Lua_IsRewardedAdReady},
     {"show_rewarded_ad", Lua_ShowRewardedAd},
@@ -532,23 +551,35 @@ static dmExtension::Result AppInitializeAppLovin(dmExtension::AppParams* params)
     return dmExtension::RESULT_OK;
 }
 
+static bool g_PlatformInitialized = false;
+
 static dmExtension::Result InitializeAppLovin(dmExtension::Params* params)
 {
     LuaInit(params->m_L);
 
-    const char *defoldEngineVersion = NULL;
+    // Defold invokes extension Initialize once for every Lua context when
+    // script.shared_state is disabled. The AppLovin platform object and its
+    // callback queue are process-global and must only be created once.
+    if (g_PlatformInitialized)
+    {
+        return dmExtension::RESULT_OK;
+    }
+
+    InitializeCallback();
+
+    const char* defoldEngineVersion = NULL;
 
     lua_getglobal(params->m_L, "sys");                       // push 'sys' onto stack
     lua_getfield(params->m_L, -1, "get_engine_info");        // push desired function
     lua_call(params->m_L, 0, 1);                             // call function with 0 arg, 1 return value
     lua_getfield(params->m_L, -1, "version");                // push desired property
     defoldEngineVersion = lua_tostring(params->m_L, -1);     // get return value
-    lua_pop(params->m_L, 3);                                 // pop result, function, 'sys'
 
-    const char* extensionVersion = dmConfigFile::GetString(params->m_ConfigFile, "project.version", "0.0");
-    
-    Initialize_Ext(defoldEngineVersion, extensionVersion);
-    InitializeCallback();
+    const char* extensionVersion =
+        dmConfigFile::GetString(params->m_ConfigFile, "applovin.version", "0.0.0");
+    Initialize_Ext(defoldEngineVersion ? defoldEngineVersion : "unknown", extensionVersion);
+    g_PlatformInitialized = true;
+    lua_pop(params->m_L, 3);                                 // pop result, function, 'sys'
     return dmExtension::RESULT_OK;
 }
 
@@ -559,7 +590,14 @@ static dmExtension::Result AppFinalizeAppLovin(dmExtension::AppParams* params)
 
 static dmExtension::Result FinalizeAppLovin(dmExtension::Params* params)
 {
+    if (!g_PlatformInitialized)
+    {
+        return dmExtension::RESULT_OK;
+    }
+
+    Finalize_Ext();
     FinalizeCallback();
+    g_PlatformInitialized = false;
     return dmExtension::RESULT_OK;
 }
 

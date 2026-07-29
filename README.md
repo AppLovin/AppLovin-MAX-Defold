@@ -1,55 +1,91 @@
+# AppLovin MAX for Defold
 
-# AppLovin-MAX-Defold
+Native AppLovin MAX extension for Defold on Android and iOS. It supports
+interstitial, rewarded, banner, and MREC ads, along with MAX debugging,
+consent, test-device, custom-event, and revenue APIs.
 
-AppLovin MAX Defold Plugin for Android and iOS
+Version 2.0.0 uses AppLovin MAX 13.6.3 and requires:
+
+- Defold 1.13.0 or newer
+- Android API 24 or newer
+- iOS 15.0 or newer
+
+## Install
+
+Open `game.project` in the Defold editor and select **Project** in the left
+sidebar. Under **Dependencies**, click **+** and paste:
+
+```text
+https://github.com/defold/AppLovin-MAX-Defold/archive/refs/tags/2.0.0.zip
+```
+
+Then select **Project > Fetch Libraries** from the main menu.
+
+In the `game.project` editor, also configure:
+
+- **Android > Minimum SDK Version**: `24`
+- **AppLovin > iOS User Tracking Usage Description**: a message explaining
+  why your app requests permission to use device information for advertising
+
+## Initialize
+
+Register the callback and apply privacy settings before initialization. Wait
+for `OnSdkInitializedEvent` before loading ads:
+
+```lua
+local function max_callback(self, event, data)
+    if event == "OnSdkInitializedEvent" then
+        applovin.load_interstitial("YOUR_INTERSTITIAL_AD_UNIT_ID")
+    end
+end
+
+function init(self)
+    applovin.set_callback(max_callback)
+    applovin.set_has_user_consent(user_has_consented)
+    applovin.set_do_not_sell(user_opted_out)
+    applovin.initialize("YOUR_APPLOVIN_SDK_KEY")
+end
+
+function final(self)
+    applovin.set_callback(nil)
+end
+```
+
+Use an SDK key and platform-specific ad-unit IDs from the MAX dashboard for
+your Android package and iOS bundle identifier.
+
+## Mediated networks
+
+Third-party adapters are disabled by default. Enable only the networks used by
+your MAX account:
+
+```ini
+[applovin]
+unity_ads_android = 1
+unity_ads_ios = 1
+```
+
+Android and iOS are configured independently. Google adapters also require
+`google_android_app_id` or `google_ios_app_id`. See the
+[integration guide](docs/index.md#mediated-networks) for details.
+On iOS, each enabled adapter also adds its official SKAdNetwork identifiers.
+
+## Example project
+
+The repository example contains a demo SDK key. Debug builds initialize MAX
+and can open the Mediation Debugger; release builds do not pass the demo key to
+MAX. Add your own ad-unit IDs to test ad formats.
 
 ## Documentation
 
-Please check out our [documentation](https://developers.applovin.com/en/defold/overview/integration) to get started on integrating and enabling mediated networks using our guides.
+- [Integration guide](docs/index.md)
+- [Migration from 1.x](MIGRATION.md)
+- [Development and release workflow](DEVELOPMENT.md)
+- [Official AppLovin Defold documentation](https://support.applovin.com/en/max/defold/overview/integration)
 
-## Demo App
-
-To get started with the demo app, follow the instructions below:
-
-1. Clone this repository and open the `game.project` file in Defold editor.
-2. For iOS, update the **Bundle Identifier** with the unique identifier associated with the app you will create or have already created in the MAX dashboard. Also update the extension property `ios_user_tracking_usage_description` for tracking authorization prompt in iOS 14+.
-	```
-	[ios]  
-	bundle_identifier = YOUR_BUNDLE_IDENTIFIER  
-	  
-	[applovin]  
-	ios_user_tracking_usage_description = YOUR_USAGE_DESCRIPTION
-	```
-
-3. For Android, Update the  **Package Name**  with the unique identifier associated with the app you will create or have already created in the MAX dashboard. 
-	```
-	[android]  
-	package = YOUR_PACKAGE_NAME
-	```
-
-4. Open the `example/main.gui_script` file and update the `SDK_KEY` value with the AppLovin SDK key associated with your account.
-	```lua
-	local SDK_KEY = "YOUR_SDK_KEY_HERE"
-	```
-
-5. Open the `example/ads.lua` file and update the MAX ad unit IDs for the ad formats you would like to test. Each ad format will correspond to a unique MAX ad unit ID you created in the AppLovin dashboard for the bundle ID used before.
-	```lua
-	local ios_ad_units = { 
-		Interstitial = "ENTER_IOS_INTERSTITIAL_AD_UNIT_ID_HERE",
-		Rewarded = "ENTER_IOS_REWARDED_AD_UNIT_ID_HERE",
-		Banner = "ENTER_IOS_BANNER_AD_UNIT_ID_HERE",
-		MRec = "ENTER_IOS_MREC_AD_UNIT_ID_HERE"
-	}
-
-	local android_ad_units = {
-		Interstitial = "ENTER_ANDROID_INTERSTITIAL_AD_UNIT_ID_HERE",
-		Rewarded = "ENTER_ANDROID_REWARDED_AD_UNIT_ID_HERE",
-		Banner = "ENTER_ANDROID_BANNER_AD_UNIT_ID_HERE",
-		MRec = "ENTER_ANDROID_MREC_AD_UNIT_ID_HERE"
-	}
-	```
-	
-6. Deploy the demo app to a platform by selecting **Project > Bundle**.
+Before shipping, review AppLovin's
+[privacy guidance](https://support.applovin.com/en/max/defold/overview/privacy)
+and the requirements of every enabled mediated network.
 
 ## License
 

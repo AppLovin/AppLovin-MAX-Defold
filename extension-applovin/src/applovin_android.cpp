@@ -1,17 +1,285 @@
 #if defined(DM_PLATFORM_ANDROID)
 
 #include <dmsdk/dlib/android.h>
+#include <limits.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include "applovin_private.h"
 #include "com_defold_applovin_MaxDefoldPlugin.h"
 #include "applovin_callback_private.h"
 
+namespace {
+
+static const uint32_t UTF_REPLACEMENT_CHARACTER = 0xFFFD;
+
+static bool IsUtf8ContinuationByte(uint8_t byte)
+{
+    return (byte & 0xC0) == 0x80;
+}
+
+static uint32_t DecodeUtf8CodePoint(const uint8_t* utf8, size_t length, size_t* offset)
+{
+    const size_t start = *offset;
+    const uint8_t first = utf8[start];
+
+    if (first <= 0x7F)
+    {
+        *offset = start + 1;
+        return first;
+    }
+
+    if (first >= 0xC2 && first <= 0xDF && start + 1 < length)
+    {
+        const uint8_t second = utf8[start + 1];
+        if (IsUtf8ContinuationByte(second))
+        {
+            *offset = start + 2;
+            return ((uint32_t)(first & 0x1F) << 6)
+                | (uint32_t)(second & 0x3F);
+        }
+    }
+    else if (first >= 0xE0 && first <= 0xEF && start + 2 < length)
+    {
+        const uint8_t second = utf8[start + 1];
+        const uint8_t third = utf8[start + 2];
+        const bool secondIsValid = IsUtf8ContinuationByte(second)
+            && (first != 0xE0 || second >= 0xA0)
+            && (first != 0xED || second <= 0x9F);
+        if (secondIsValid && IsUtf8ContinuationByte(third))
+        {
+            *offset = start + 3;
+            return ((uint32_t)(first & 0x0F) << 12)
+                | ((uint32_t)(second & 0x3F) << 6)
+                | (uint32_t)(third & 0x3F);
+        }
+    }
+    else if (first >= 0xF0 && first <= 0xF4 && start + 3 < length)
+    {
+        const uint8_t second = utf8[start + 1];
+        const uint8_t third = utf8[start + 2];
+        const uint8_t fourth = utf8[start + 3];
+        const bool secondIsValid = IsUtf8ContinuationByte(second)
+            && (first != 0xF0 || second >= 0x90)
+            && (first != 0xF4 || second <= 0x8F);
+        if (secondIsValid && IsUtf8ContinuationByte(third) && IsUtf8ContinuationByte(fourth))
+        {
+            *offset = start + 4;
+            return ((uint32_t)(first & 0x07) << 18)
+                | ((uint32_t)(second & 0x3F) << 12)
+                | ((uint32_t)(third & 0x3F) << 6)
+                | (uint32_t)(fourth & 0x3F);
+        }
+    }
+
+    // Consume one byte so every malformed sequence makes progress and becomes U+FFFD.
+    *offset = start + 1;
+    return UTF_REPLACEMENT_CHARACTER;
+}
+
+static uint32_t DecodeUtf16CodePoint(const jchar* utf16, jsize length, jsize* offset)
+{
+    const uint32_t first = utf16[(*offset)++];
+    if (first >= 0xD800 && first <= 0xDBFF)
+    {
+        if (*offset < length)
+        {
+            const uint32_t second = utf16[*offset];
+            if (second >= 0xDC00 && second <= 0xDFFF)
+            {
+                ++(*offset);
+                return 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00);
+            }
+        }
+        return UTF_REPLACEMENT_CHARACTER;
+    }
+    if (first >= 0xDC00 && first <= 0xDFFF)
+    {
+        return UTF_REPLACEMENT_CHARACTER;
+    }
+    return first;
+}
+
+static size_t GetUtf8CodePointLength(uint32_t codePoint)
+{
+    if (codePoint <= 0x7F)
+    {
+        return 1;
+    }
+    if (codePoint <= 0x7FF)
+    {
+        return 2;
+    }
+    if (codePoint <= 0xFFFF)
+    {
+        return 3;
+    }
+    return 4;
+}
+
+static size_t EncodeUtf8CodePoint(uint32_t codePoint, char* output)
+{
+    if (codePoint <= 0x7F)
+    {
+        output[0] = (char)codePoint;
+        return 1;
+    }
+    if (codePoint <= 0x7FF)
+    {
+        output[0] = (char)(0xC0 | (codePoint >> 6));
+        output[1] = (char)(0x80 | (codePoint & 0x3F));
+        return 2;
+    }
+    if (codePoint <= 0xFFFF)
+    {
+        output[0] = (char)(0xE0 | (codePoint >> 12));
+        output[1] = (char)(0x80 | ((codePoint >> 6) & 0x3F));
+        output[2] = (char)(0x80 | (codePoint & 0x3F));
+        return 3;
+    }
+
+    output[0] = (char)(0xF0 | (codePoint >> 18));
+    output[1] = (char)(0x80 | ((codePoint >> 12) & 0x3F));
+    output[2] = (char)(0x80 | ((codePoint >> 6) & 0x3F));
+    output[3] = (char)(0x80 | (codePoint & 0x3F));
+    return 4;
+}
+
+static jstring Utf8ToJString(JNIEnv* env, const char* utf8)
+{
+    if (!env || !utf8)
+    {
+        return 0;
+    }
+
+    const size_t utf8Length = strlen(utf8);
+    if (utf8Length > (size_t)INT_MAX || utf8Length > SIZE_MAX / sizeof(jchar))
+    {
+        dmLogError("Unable to convert an oversized UTF-8 string to a Java string.");
+        return 0;
+    }
+
+    jchar* utf16 = utf8Length ? (jchar*)malloc(utf8Length * sizeof(jchar)) : 0;
+    if (utf8Length && !utf16)
+    {
+        dmLogError("Unable to allocate memory for UTF-8 to UTF-16 conversion.");
+        return 0;
+    }
+
+    size_t utf8Offset = 0;
+    jsize utf16Length = 0;
+    while (utf8Offset < utf8Length)
+    {
+        const uint32_t codePoint = DecodeUtf8CodePoint((const uint8_t*)utf8, utf8Length, &utf8Offset);
+        if (codePoint <= 0xFFFF)
+        {
+            utf16[utf16Length++] = (jchar)codePoint;
+        }
+        else
+        {
+            const uint32_t supplementary = codePoint - 0x10000;
+            utf16[utf16Length++] = (jchar)(0xD800 + (supplementary >> 10));
+            utf16[utf16Length++] = (jchar)(0xDC00 + (supplementary & 0x3FF));
+        }
+    }
+
+    const jchar empty = 0;
+    jstring result = env->NewString(utf16Length ? utf16 : &empty, utf16Length);
+    free(utf16);
+    return result;
+}
+
+static bool JStringToUtf8(JNIEnv* env, jstring string, char** output)
+{
+    if (!output)
+    {
+        return false;
+    }
+    *output = 0;
+    if (!env || !string)
+    {
+        return false;
+    }
+
+    const jsize utf16Length = env->GetStringLength(string);
+    if (utf16Length == 0)
+    {
+        *output = (char*)malloc(1);
+        if (!*output)
+        {
+            dmLogError("Unable to allocate memory for an empty UTF-8 string.");
+            return false;
+        }
+        (*output)[0] = '\0';
+        return true;
+    }
+
+    const jchar* utf16 = env->GetStringChars(string, 0);
+    if (!utf16)
+    {
+        return false;
+    }
+
+    size_t utf8Length = 0;
+    jsize utf16Offset = 0;
+    while (utf16Offset < utf16Length)
+    {
+        const uint32_t codePoint = DecodeUtf16CodePoint(utf16, utf16Length, &utf16Offset);
+        if (codePoint == 0)
+        {
+            env->ReleaseStringChars(string, utf16);
+            dmLogError("Unable to pass a Java string containing U+0000 through a C string API.");
+            return false;
+        }
+        const size_t codePointLength = GetUtf8CodePointLength(codePoint);
+        if (utf8Length > SIZE_MAX - codePointLength - 1)
+        {
+            env->ReleaseStringChars(string, utf16);
+            dmLogError("Unable to convert an oversized Java string to UTF-8.");
+            return false;
+        }
+        utf8Length += codePointLength;
+    }
+
+    char* utf8 = (char*)malloc(utf8Length + 1);
+    if (!utf8)
+    {
+        env->ReleaseStringChars(string, utf16);
+        dmLogError("Unable to allocate memory for UTF-16 to UTF-8 conversion.");
+        return false;
+    }
+
+    size_t utf8Offset = 0;
+    utf16Offset = 0;
+    while (utf16Offset < utf16Length)
+    {
+        const uint32_t codePoint = DecodeUtf16CodePoint(utf16, utf16Length, &utf16Offset);
+        utf8Offset += EncodeUtf8CodePoint(codePoint, utf8 + utf8Offset);
+    }
+    utf8[utf8Offset] = '\0';
+
+    env->ReleaseStringChars(string, utf16);
+    *output = utf8;
+    return true;
+}
+
+} // namespace
+
 JNIEXPORT void JNICALL Java_com_defold_applovin_MaxDefoldPlugin_appLovinAddToQueue(JNIEnv * env, jclass cls, jstring jname, jstring jjson)
 {
-    const char* name = env->GetStringUTFChars(jname, 0);
-    const char* json = env->GetStringUTFChars(jjson, 0);
+    (void)cls;
+    char* name = 0;
+    char* json = 0;
+    if (!JStringToUtf8(env, jname, &name) || !JStringToUtf8(env, jjson, &json))
+    {
+        free(name);
+        free(json);
+        return;
+    }
+
     dmAppLovin::AddToQueueCallback(name, json);
-    env->ReleaseStringUTFChars(jname, name);
-    env->ReleaseStringUTFChars(jjson, json);
+    free(name);
+    free(json);
 }
 
 namespace dmAppLovin {
@@ -20,6 +288,7 @@ struct AppLovin
 {
     jobject   m_MaxDefoldPlugin;
 
+    jmethodID m_Destroy;
     jmethodID m_Initialize;
     jmethodID m_IsInitialized;
     jmethodID m_ShowMediationDebugger;
@@ -75,6 +344,10 @@ static AppLovin   g_applovin;
 
 static void CallVoidMethod(jobject instance, jmethodID method)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
@@ -83,6 +356,10 @@ static void CallVoidMethod(jobject instance, jmethodID method)
 
 static bool CallBoolMethod(jobject instance, jmethodID method)
 {
+    if (!instance || !method)
+    {
+        return false;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
@@ -92,10 +369,18 @@ static bool CallBoolMethod(jobject instance, jmethodID method)
 
 static bool CallBoolMethodChar(jobject instance, jmethodID method, const char* cstr)
 {
+    if (!instance || !method)
+    {
+        return false;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jstring jstr = env->NewStringUTF(cstr);
+    jstring jstr = Utf8ToJString(env, cstr);
+    if (!jstr)
+    {
+        return false;
+    }
     jboolean return_value = (jboolean)env->CallBooleanMethod(instance, method, jstr);
     env->DeleteLocalRef(jstr);
     return JNI_TRUE == return_value;
@@ -103,38 +388,42 @@ static bool CallBoolMethodChar(jobject instance, jmethodID method, const char* c
 
 static void CallVoidMethodChar(jobject instance, jmethodID method, const char* cstr)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jstring jstr = env->NewStringUTF(cstr);
+    jstring jstr = Utf8ToJString(env, cstr);
+    if (!jstr)
+    {
+        return;
+    }
     env->CallVoidMethod(instance, method, jstr);
     env->DeleteLocalRef(jstr);
 }
 
-static char const* CallCharMethodChar(jobject instance, jmethodID method, const char* cstr)
-{
-    dmAndroid::ThreadAttacher threadAttacher;
-    JNIEnv* env = threadAttacher.GetEnv();
-
-    jstring jstr = env->NewStringUTF(cstr);
-    jstring returned_value = (jstring)env->CallObjectMethod(instance, method, jstr);
-    env->DeleteLocalRef(jstr);
-    if (returned_value == NULL)
-    {
-        return NULL;
-    }
-    const char* returned_char = env->GetStringUTFChars(returned_value, 0);
-    env->DeleteLocalRef(returned_value);
-    return returned_char;
-}
-
 static void CallVoidMethodCharChar(jobject instance, jmethodID method, const char* cstr_1, const char* cstr_2)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jstring jstr_1 = env->NewStringUTF(cstr_1);
-    jstring jstr_2 = env->NewStringUTF(cstr_2);
+    jstring jstr_1 = Utf8ToJString(env, cstr_1);
+    if (!jstr_1)
+    {
+        return;
+    }
+    jstring jstr_2 = Utf8ToJString(env, cstr_2);
+    if (!jstr_2)
+    {
+        env->DeleteLocalRef(jstr_1);
+        return;
+    }
     env->CallVoidMethod(instance, method, jstr_1, jstr_2);
     env->DeleteLocalRef(jstr_1);
     env->DeleteLocalRef(jstr_2);
@@ -142,12 +431,31 @@ static void CallVoidMethodCharChar(jobject instance, jmethodID method, const cha
 
 static void CallVoidMethodCharCharChar(jobject instance, jmethodID method, const char* cstr_1, const char* cstr_2, const char* cstr_3)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jstring jstr_1 = env->NewStringUTF(cstr_1);
-    jstring jstr_2 = env->NewStringUTF(cstr_2);
-    jstring jstr_3 = env->NewStringUTF(cstr_3);
+    jstring jstr_1 = Utf8ToJString(env, cstr_1);
+    if (!jstr_1)
+    {
+        return;
+    }
+    jstring jstr_2 = Utf8ToJString(env, cstr_2);
+    if (!jstr_2)
+    {
+        env->DeleteLocalRef(jstr_1);
+        return;
+    }
+    jstring jstr_3 = Utf8ToJString(env, cstr_3);
+    if (!jstr_3)
+    {
+        env->DeleteLocalRef(jstr_1);
+        env->DeleteLocalRef(jstr_2);
+        return;
+    }
     env->CallVoidMethod(instance, method, jstr_1, jstr_2, jstr_3);
     env->DeleteLocalRef(jstr_1);
     env->DeleteLocalRef(jstr_2);
@@ -156,16 +464,28 @@ static void CallVoidMethodCharCharChar(jobject instance, jmethodID method, const
 
 static void CallVoidMethodCharInt(jobject instance, jmethodID method, const char* cstr, int cint)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jstring jstr = env->NewStringUTF(cstr);
+    jstring jstr = Utf8ToJString(env, cstr);
+    if (!jstr)
+    {
+        return;
+    }
     env->CallVoidMethod(instance, method, jstr, cint);
     env->DeleteLocalRef(jstr);
 }
 
 static void CallVoidMethodInt(jobject instance, jmethodID method, int cint)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
@@ -174,6 +494,10 @@ static void CallVoidMethodInt(jobject instance, jmethodID method, int cint)
 
 static void CallVoidMethodBool(jobject instance, jmethodID method, bool cbool)
 {
+    if (!instance || !method)
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
@@ -182,6 +506,7 @@ static void CallVoidMethodBool(jobject instance, jmethodID method, bool cbool)
 
 static void InitJNIMethods(JNIEnv* env, jclass cls)
 {
+    g_applovin.m_Destroy = env->GetMethodID(cls, "destroy", "()V");
     g_applovin.m_Initialize = env->GetMethodID(cls, "initialize", "(Ljava/lang/String;)V");
     g_applovin.m_ShowMediationDebugger = env->GetMethodID(cls, "showMediationDebugger", "()V");
     g_applovin.m_IsInitialized = env->GetMethodID(cls, "isInitialized", "()Z");
@@ -233,19 +558,57 @@ static void InitJNIMethods(JNIEnv* env, jclass cls)
     g_applovin.m_DestroyMRec = env->GetMethodID(cls, "destroyMRec", "(Ljava/lang/String;)V");
 }
 
-void Initialize_Ext(const char* version, const char* extVersion)
+void Initialize_Ext(const char* engineVersion, const char* extensionVersion)
 {
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
     jclass cls = dmAndroid::LoadClass(env, "com.defold.applovin.MaxDefoldPlugin");
+    if (!cls)
+    {
+        dmLogError("Unable to load com.defold.applovin.MaxDefoldPlugin.");
+        return;
+    }
 
     InitJNIMethods(env, cls);
-    jstring jstr = env->NewStringUTF(version);
-    jstring jstr1 = env->NewStringUTF(extVersion);
+    jstring jEngineVersion = Utf8ToJString(env, engineVersion);
+    if (!jEngineVersion)
+    {
+        env->DeleteLocalRef(cls);
+        return;
+    }
+    jstring jExtensionVersion = Utf8ToJString(env, extensionVersion);
+    if (!jExtensionVersion)
+    {
+        env->DeleteLocalRef(jEngineVersion);
+        env->DeleteLocalRef(cls);
+        return;
+    }
     jmethodID jni_constructor = env->GetMethodID(cls, "<init>", "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;)V");
-    g_applovin.m_MaxDefoldPlugin = env->NewGlobalRef(env->NewObject(cls, jni_constructor, threadAttacher.GetActivity()->clazz, jstr, jstr1));
-    env->DeleteLocalRef(jstr);
-    env->DeleteLocalRef(jstr1);
+    jobject localPlugin = jni_constructor
+        ? env->NewObject(cls, jni_constructor, threadAttacher.GetActivity()->clazz, jEngineVersion, jExtensionVersion)
+        : 0;
+    if (localPlugin)
+    {
+        g_applovin.m_MaxDefoldPlugin = env->NewGlobalRef(localPlugin);
+        env->DeleteLocalRef(localPlugin);
+    }
+    env->DeleteLocalRef(jEngineVersion);
+    env->DeleteLocalRef(jExtensionVersion);
+    env->DeleteLocalRef(cls);
+}
+
+void Finalize_Ext()
+{
+    if (!g_applovin.m_MaxDefoldPlugin)
+    {
+        return;
+    }
+
+    CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_Destroy);
+    dmAndroid::ThreadAttacher threadAttacher;
+    JNIEnv* env = threadAttacher.GetEnv();
+    env->DeleteGlobalRef(g_applovin.m_MaxDefoldPlugin);
+    g_applovin.m_MaxDefoldPlugin = 0;
 }
 
 void Initialize(const char* sdkKey)
@@ -350,15 +713,47 @@ void SetCreativeDebuggerEnabled(bool enabled)
 
 void SetTestDeviceAdvertisingIds(const char** advertisingIds, int count)
 {
+    if (!g_applovin.m_MaxDefoldPlugin || !g_applovin.m_SetTestDeviceAdvertisingIds
+        || count < 0 || (count > 0 && !advertisingIds))
+    {
+        return;
+    }
     dmAndroid::ThreadAttacher threadAttacher;
     JNIEnv* env = threadAttacher.GetEnv();
 
-    jobjectArray jAdvertisingIds = env->NewObjectArray(count, env->FindClass("java/lang/String"), NULL);
-    for(int i = 0; i < count; i++) {
-        env->SetObjectArrayElement(jAdvertisingIds, i, env->NewStringUTF(advertisingIds[i]));
+    jclass stringClass = env->FindClass("java/lang/String");
+    if (!stringClass)
+    {
+        return;
+    }
+    jobjectArray jAdvertisingIds = env->NewObjectArray((jsize)count, stringClass, NULL);
+    if (!jAdvertisingIds)
+    {
+        env->DeleteLocalRef(stringClass);
+        return;
+    }
+    for (int i = 0; i < count; ++i)
+    {
+        jstring jAdvertisingId = Utf8ToJString(env, advertisingIds[i]);
+        if (!jAdvertisingId)
+        {
+            env->DeleteLocalRef(jAdvertisingIds);
+            env->DeleteLocalRef(stringClass);
+            return;
+        }
+        env->SetObjectArrayElement(jAdvertisingIds, (jsize)i, jAdvertisingId);
+        env->DeleteLocalRef(jAdvertisingId);
+        if (env->ExceptionCheck())
+        {
+            env->DeleteLocalRef(jAdvertisingIds);
+            env->DeleteLocalRef(stringClass);
+            return;
+        }
     }
 
     env->CallVoidMethod(g_applovin.m_MaxDefoldPlugin, g_applovin.m_SetTestDeviceAdvertisingIds, jAdvertisingIds);
+    env->DeleteLocalRef(jAdvertisingIds);
+    env->DeleteLocalRef(stringClass);
 }
 
 void TrackEvent(const char* event, const char* parameters)

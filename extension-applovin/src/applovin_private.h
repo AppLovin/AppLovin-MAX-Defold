@@ -4,7 +4,9 @@
 
 namespace dmAppLovin {
 
-void Initialize_Ext(const char* version, const char* extVersion);
+void Initialize_Ext(const char* engineVersion, const char* extensionVersion);
+
+void Finalize_Ext();
 
 void Initialize(const char* sdkKey);
 

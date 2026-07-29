@@ -9,6 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithView:(UIView *)mainView;
 - (void)initialize:(NSString *)pluginVersion sdkKey:(NSString *)sdkKey;
 - (BOOL)isInitialized;
+- (void)destroy;
 
 #pragma mark - Privacy
 
@@ -40,7 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Event Tracking
 
-- (void)trackEvent:(NSString *)event parameters:(NSDictionary<NSString *, NSString *> *)parameters;
+- (void)trackEvent:(NSString *)event parameters:(NSDictionary<NSString *, id> *)parameters;
 
 #pragma mark - Interstitials
 

@@ -10,8 +10,8 @@ extern "C" {
 #endif
     /*
     * Class:     com_defold_applovin_MaxDefoldPlugin
-    * Method:    appLovinAddToQueue_first_arg
-    * Signature: (ILjava/lang/String;I)V
+    * Method:    appLovinAddToQueue
+    * Signature: (Ljava/lang/String;Ljava/lang/String;)V
     */
     JNIEXPORT void JNICALL Java_com_defold_applovin_MaxDefoldPlugin_appLovinAddToQueue
         (JNIEnv *, jclass, jstring, jstring);

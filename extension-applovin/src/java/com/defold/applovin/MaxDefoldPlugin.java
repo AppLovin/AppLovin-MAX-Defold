@@ -5,22 +5,19 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.WindowManager;
-import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 
-import com.applovin.impl.sdk.utils.JsonUtils;
-import com.applovin.impl.sdk.utils.StringUtils;
 import com.applovin.mediation.MaxAd;
 import com.applovin.mediation.MaxAdFormat;
 import com.applovin.mediation.MaxAdListener;
@@ -39,9 +36,13 @@ import com.applovin.sdk.AppLovinPrivacySettings;
 import com.applovin.sdk.AppLovinSdk;
 import com.applovin.sdk.AppLovinSdkConfiguration;
 import com.applovin.sdk.AppLovinSdkConfiguration.ConsentFlowUserGeography;
+import com.applovin.sdk.AppLovinSdkInitializationConfiguration;
 import com.applovin.sdk.AppLovinSdkSettings;
 import com.applovin.sdk.AppLovinSdkUtils;
+import com.applovin.sdk.AppLovinTermsAndPrivacyPolicyFlowSettings;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
@@ -49,374 +50,1080 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class MaxDefoldPlugin
         implements MaxAdListener, MaxAdViewAdListener, MaxRewardedAdListener, MaxAdRevenueListener, AppLovinCmpService.OnCompletedListener
 {
-    private static final String TAG     = "MaxDefoldPlugin";
+    private static final String TAG = "MaxDefoldPlugin";
     private static final String SDK_TAG = "AppLovinSdk";
+    private static final long UI_CALL_TIMEOUT_SECONDS = 5;
+    private static final long SHARED_INITIALIZATION_WAIT_MILLIS = 50;
+
+    private enum State
+    {
+        NEW,
+        INITIALIZING,
+        READY,
+        DESTROYED
+    }
+
+    private enum SharedInitializationState
+    {
+        IDLE,
+        IN_PROGRESS,
+        COMPLETE
+    }
+
+    private interface ActivityAction
+    {
+        void run(Activity activity);
+    }
+
+    private interface ActivityCallable<T>
+    {
+        T call(Activity activity) throws Exception;
+    }
 
     public static native void appLovinAddToQueue(String msg, String json);
 
-    // Parent Fields
-    private AppLovinSdk              sdk;
-    private boolean                  isPluginInitialized = false;
-    private boolean                  isSdkInitialized    = false;
-    private AppLovinSdkConfiguration sdkConfiguration;
-
-    // Store these values if pub sets before initializing
-    private String       userIdToSet;
-    private Boolean      mutedToSet;
-    private List<String> testDeviceAdvertisingIdsToSet;
-    private Boolean      verboseLoggingToSet;
-    private Boolean      creativeDebuggerEnabledToSet;
-
-    private Boolean termsAndPrivacyPolicyFlowEnabledToSet;
-    private Uri     privacyPolicyUriToSet;
-    private Uri     termsOfServiceUriToSet;
-    private String  debugUserGeographyToSet;
-
-    // Fullscreen Ad Fields
-    private final Map<String, MaxInterstitialAd> mInterstitials = new HashMap<>( 2 );
-    private final Map<String, MaxRewardedAd>     mRewardedAds   = new HashMap<>( 2 );
-
-    // Banner Fields
-    private final Map<String, MaxAdView>   mAdViews                    = new HashMap<>( 2 );
-    private final Map<String, MaxAdFormat> mAdViewAdFormats            = new HashMap<>( 2 );
-    private final Map<String, String>      mAdViewPositions            = new HashMap<>( 2 );
-    private final List<String>             mAdUnitIdsToShowAfterCreate = new ArrayList<>( 2 );
+    private static final Object SHARED_INITIALIZATION_LOCK = new Object();
+    private static SharedInitializationState sharedInitializationState =
+            SharedInitializationState.IDLE;
+    private static AppLovinSdkConfiguration sharedSdkConfiguration;
+    private static long sharedInitializationGeneration;
 
     private final WeakReference<Activity> gameActivity;
-    private final String                  engineVersion;
-    private final String                  pluginVersion;
+    private final Handler mainHandler = new Handler( Looper.getMainLooper() );
+    private final Object lifecycleLock = new Object();
+    private final String pluginVersion;
 
-    private Activity getGameActivity() { return gameActivity.get(); }
+    private volatile State state = State.NEW;
+    private volatile long lifecycleGeneration = 1;
+    private volatile boolean destroyRequested;
+    private long initializationGeneration;
+    private FutureTask<Void> destroyTask;
+    private AppLovinSdk sdk;
+    private AppLovinSdkConfiguration sdkConfiguration;
+
+    // Values set before initialization are applied to SDK settings/configuration in initialize().
+    private String userIdToSet;
+    private Boolean mutedToSet;
+    private List<String> testDeviceAdvertisingIdsToSet;
+    private Boolean verboseLoggingToSet;
+    private Boolean creativeDebuggerEnabledToSet;
+    private Boolean termsAndPrivacyPolicyFlowEnabledToSet;
+    private Uri privacyPolicyUriToSet;
+    private Uri termsOfServiceUriToSet;
+    private String debugUserGeographyToSet;
+
+    // All ad object collections are confined to the Android UI thread.
+    private final Map<String, MaxInterstitialAd> mInterstitials = new HashMap<>( 2 );
+    private final Map<String, MaxRewardedAd> mRewardedAds = new HashMap<>( 2 );
+    private final Map<String, MaxAdView> mAdViews = new HashMap<>( 2 );
+    private final Map<String, MaxAdFormat> mAdViewAdFormats = new HashMap<>( 2 );
+    private final Map<String, String> mAdViewPlacements = new HashMap<>( 2 );
+    private final Map<String, Map<String, String>> mAdViewExtraParameters =
+            new HashMap<>( 2 );
+    private final Map<String, String> mAdViewPositions = new HashMap<>( 2 );
+    private final Map<String, Long> mAdViewGenerations = new HashMap<>( 2 );
+    private final Set<String> mAdUnitIdsToShowAfterCreate = new HashSet<>( 2 );
+    private final Set<String> mAdUnitIdsWithStoppedAutoRefresh = new HashSet<>( 2 );
+    private long nextAdViewGeneration;
+    private boolean callbackDispatchInProgress;
+
+    private final class AdViewListener
+            implements MaxAdListener, MaxAdViewAdListener, MaxAdRevenueListener
+    {
+        private final String adUnitId;
+        private final long generation;
+
+        private AdViewListener(final String adUnitId, final long generation)
+        {
+            this.adUnitId = adUnitId;
+            this.generation = generation;
+        }
+
+        @Override
+        public void onAdLoaded(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad loaded callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdLoaded( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdLoadFailed(final String ignoredAdUnitId, final MaxError error)
+        {
+            dispatchAdViewCallback( "ad load failed callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdLoadFailed( adUnitId, error );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdClicked(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad clicked callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdClicked( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdDisplayed(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad displayed callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdDisplayed( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdDisplayFailed(final MaxAd ad, final MaxError error)
+        {
+            dispatchAdViewCallback(
+                    "ad display failed callback",
+                    adUnitId,
+                    generation,
+                    new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            MaxDefoldPlugin.this.onAdDisplayFailed( ad, error );
+                        }
+                    } );
+        }
+
+        @Override
+        public void onAdHidden(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad hidden callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdHidden( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdExpanded(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad expanded callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdExpanded( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdCollapsed(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad collapsed callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdCollapsed( ad );
+                }
+            } );
+        }
+
+        @Override
+        public void onAdRevenuePaid(final MaxAd ad)
+        {
+            dispatchAdViewCallback( "ad revenue callback", adUnitId, generation, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    MaxDefoldPlugin.this.onAdRevenuePaid( ad );
+                }
+            } );
+        }
+    }
 
     // region Initialization
     public MaxDefoldPlugin(final Activity activity, final String engineVersion, final String pluginVersion)
     {
         gameActivity = new WeakReference<>( activity );
-        this.engineVersion = engineVersion;
-        this.pluginVersion = pluginVersion;
+        this.pluginVersion = TextUtils.isEmpty( pluginVersion ) ? "unknown" : pluginVersion;
     }
 
     public boolean isInitialized()
     {
-        return isPluginInitialized && isSdkInitialized;
+        return !destroyRequested && state == State.READY;
     }
 
     public void initialize(final String sdkKey)
     {
-        // Check if Activity is available
-        Activity currentActivity = getGameActivity();
-        if ( currentActivity == null ) throw new IllegalStateException( "No Activity found" );
-
-        final Context context = currentActivity.getApplicationContext();
-
-        // Guard against running init logic multiple times
-        if ( isPluginInitialized )
-        {
-            sendDefoldEvent( "OnSdkInitializedEvent", getInitializationMessage( context ) );
-            return;
-        }
-
-        isPluginInitialized = true;
-
-        d( "Initializing AppLovin MAX Defold v" + pluginVersion + "..." );
-
-        // If SDK key passed in is empty, check Android Manifest
-        String sdkKeyToUse = sdkKey;
-        if ( TextUtils.isEmpty( sdkKey ) )
-        {
-            try
-            {
-                PackageManager packageManager = context.getPackageManager();
-                String packageName = context.getPackageName();
-                ApplicationInfo applicationInfo = packageManager.getApplicationInfo( packageName, PackageManager.GET_META_DATA );
-                Bundle metaData = applicationInfo.metaData;
-
-                sdkKeyToUse = metaData.getString( "applovin.sdk.key", "" );
-            }
-            catch ( Throwable th )
-            {
-                e( "Unable to retrieve SDK key from Android Manifest: " + th );
-            }
-
-            if ( TextUtils.isEmpty( sdkKeyToUse ) )
-            {
-                throw new IllegalStateException( "Unable to initialize AppLovin SDK - no SDK key provided and not found in Android Manifest!" );
-            }
-        }
-
-        AppLovinSdkSettings settings = new AppLovinSdkSettings( context );
-
-        // Selective init
-        if ( termsAndPrivacyPolicyFlowEnabledToSet != null )
-        {
-            settings.getTermsAndPrivacyPolicyFlowSettings().setEnabled( termsAndPrivacyPolicyFlowEnabledToSet );
-            termsAndPrivacyPolicyFlowEnabledToSet = null;
-        }
-
-        if ( privacyPolicyUriToSet != null )
-        {
-            settings.getTermsAndPrivacyPolicyFlowSettings().setPrivacyPolicyUri( privacyPolicyUriToSet );
-            privacyPolicyUriToSet = null;
-        }
-
-        if ( termsOfServiceUriToSet != null )
-        {
-            settings.getTermsAndPrivacyPolicyFlowSettings().setTermsOfServiceUri( termsOfServiceUriToSet );
-            termsOfServiceUriToSet = null;
-        }
-
-        if ( AppLovinSdkUtils.isValidString( debugUserGeographyToSet ) )
-        {
-            settings.getTermsAndPrivacyPolicyFlowSettings().setDebugUserGeography( getAppLovinConsentFlowUserGeography( debugUserGeographyToSet ) );
-            debugUserGeographyToSet = null;
-        }
-
-        if ( mutedToSet != null )
-        {
-            settings.setMuted( mutedToSet );
-            mutedToSet = null;
-        }
-
-        if ( testDeviceAdvertisingIdsToSet != null )
-        {
-            settings.setTestDeviceAdvertisingIds( testDeviceAdvertisingIdsToSet );
-            testDeviceAdvertisingIdsToSet = null;
-        }
-
-        if ( verboseLoggingToSet != null )
-        {
-            settings.setVerboseLogging( verboseLoggingToSet );
-            verboseLoggingToSet = null;
-        }
-
-        if ( creativeDebuggerEnabledToSet != null )
-        {
-            settings.setCreativeDebuggerEnabled( creativeDebuggerEnabledToSet );
-            creativeDebuggerEnabledToSet = null;
-        }
-
-        // Initialize SDK
-        sdk = AppLovinSdk.getInstance( sdkKeyToUse, settings, currentActivity );
-        sdk.setPluginVersion( "Defold-" + pluginVersion );
-        sdk.setMediationProvider( AppLovinMediationProvider.MAX );
-
-        if ( !TextUtils.isEmpty( userIdToSet ) )
-        {
-            sdk.setUserIdentifier( userIdToSet );
-            userIdToSet = null;
-        }
-
-        sdk.initializeSdk( new AppLovinSdk.SdkInitializationListener()
+        runOnUiThread( "initialize", new ActivityAction()
         {
             @Override
-            public void onSdkInitialized(final AppLovinSdkConfiguration configuration)
+            public void run(final Activity activity)
             {
-                d( "SDK initialized" );
+                if ( state == State.INITIALIZING )
+                {
+                    d( "Ignoring initialize() while SDK initialization is already in progress" );
+                    return;
+                }
 
-                sdkConfiguration = configuration;
-                isSdkInitialized = true;
+                if ( state == State.READY )
+                {
+                    d( "SDK is already initialized" );
+                    sendDefoldEvent( "OnSdkInitializedEvent", getInitializationMessage() );
+                    return;
+                }
 
-                sendDefoldEvent( "OnSdkInitializedEvent", getInitializationMessage( context ) );
+                final Context context = activity.getApplicationContext();
+                final String sdkKeyToUse = resolveSdkKey( sdkKey, context );
+                if ( TextUtils.isEmpty( sdkKeyToUse ) )
+                {
+                    e( "Unable to initialize AppLovin SDK: no SDK key was provided or found in AndroidManifest.xml" );
+                    return;
+                }
+
+                d( "Initializing AppLovin MAX Defold v" + pluginVersion + "..." );
+
+                try
+                {
+                    sdk = AppLovinSdk.getInstance( context );
+                    applyCachedSettings( sdk.getSettings() );
+
+                    AppLovinSdkInitializationConfiguration.Builder builder =
+                            AppLovinSdkInitializationConfiguration.builder( sdkKeyToUse )
+                                    .setMediationProvider( AppLovinMediationProvider.MAX )
+                                    .setPluginVersion( "Defold-" + pluginVersion )
+                                    .setExceptionHandlerEnabled( true );
+
+                    if ( testDeviceAdvertisingIdsToSet != null )
+                    {
+                        builder.setTestDeviceAdvertisingIds( new ArrayList<>( testDeviceAdvertisingIdsToSet ) );
+                    }
+
+                    final long expectedLifecycleGeneration;
+                    final long expectedInitializationGeneration;
+                    synchronized ( lifecycleLock )
+                    {
+                        if ( destroyRequested || state == State.DESTROYED )
+                        {
+                            return;
+                        }
+
+                        expectedLifecycleGeneration = lifecycleGeneration;
+                        expectedInitializationGeneration = ++initializationGeneration;
+                        state = State.INITIALIZING;
+                    }
+                    startOrJoinSdkInitialization(
+                            builder.build(),
+                            expectedLifecycleGeneration,
+                            expectedInitializationGeneration );
+                }
+                catch ( final Throwable throwable )
+                {
+                    synchronized ( lifecycleLock )
+                    {
+                        if ( !destroyRequested
+                                && ( state == State.NEW || state == State.INITIALIZING ) )
+                        {
+                            ++initializationGeneration;
+                            sdk = null;
+                            sdkConfiguration = null;
+                            state = State.NEW;
+                        }
+                    }
+                    e( "Failed to initialize AppLovin SDK: " + Log.getStackTraceString( throwable ) );
+                }
             }
         } );
     }
 
-    private JSONObject getInitializationMessage(final Context context)
+    private void completeSdkInitialization(
+            final AppLovinSdkConfiguration configuration,
+            final long expectedLifecycleGeneration,
+            final long expectedInitializationGeneration)
     {
-        JSONObject message = new JSONObject();
-
-        if ( sdkConfiguration != null )
+        synchronized ( lifecycleLock )
         {
-            JsonUtils.putString( message, "countryCode", sdkConfiguration.getCountryCode() );
-            JsonUtils.putInt( message, "consentFlowUserGeography", sdkConfiguration.getConsentFlowUserGeography().ordinal() );
-            JsonUtils.putBoolean( message, "isTestModeEnabled", sdkConfiguration.isTestModeEnabled() );
+            if ( destroyRequested
+                    || state != State.INITIALIZING
+                    || lifecycleGeneration != expectedLifecycleGeneration
+                    || initializationGeneration != expectedInitializationGeneration )
+            {
+                return;
+            }
+
+            sdkConfiguration = configuration;
+            state = State.READY;
+        }
+        d( "SDK initialized" );
+        sendDefoldEvent( "OnSdkInitializedEvent", getInitializationMessage() );
+    }
+
+    private void startOrJoinSdkInitialization(
+            final AppLovinSdkInitializationConfiguration initializationConfiguration,
+            final long expectedLifecycleGeneration,
+            final long expectedInitializationGeneration) throws Throwable
+    {
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested
+                    || state != State.INITIALIZING
+                    || lifecycleGeneration != expectedLifecycleGeneration
+                    || initializationGeneration != expectedInitializationGeneration )
+            {
+                return;
+            }
         }
 
+        final boolean shouldInitialize;
+        final boolean initializationComplete;
+        final AppLovinSdkConfiguration completedConfiguration;
+        final long expectedSharedInitializationGeneration;
+        synchronized ( SHARED_INITIALIZATION_LOCK )
+        {
+            initializationComplete =
+                    sharedInitializationState == SharedInitializationState.COMPLETE;
+            completedConfiguration = sharedSdkConfiguration;
+            if ( sharedInitializationState == SharedInitializationState.IDLE )
+            {
+                sharedInitializationState = SharedInitializationState.IN_PROGRESS;
+                expectedSharedInitializationGeneration = ++sharedInitializationGeneration;
+                shouldInitialize = true;
+            }
+            else
+            {
+                expectedSharedInitializationGeneration = sharedInitializationGeneration;
+                shouldInitialize = false;
+            }
+        }
+
+        if ( initializationComplete )
+        {
+            completeSdkInitialization(
+                    completedConfiguration,
+                    expectedLifecycleGeneration,
+                    expectedInitializationGeneration );
+            return;
+        }
+
+        if ( !shouldInitialize )
+        {
+            scheduleSharedInitializationWait(
+                    initializationConfiguration,
+                    expectedLifecycleGeneration,
+                    expectedInitializationGeneration );
+            return;
+        }
+
+        try
+        {
+            sdk.initialize( initializationConfiguration, new AppLovinSdk.SdkInitializationListener()
+            {
+                @Override
+                public void onSdkInitialized(final AppLovinSdkConfiguration configuration)
+                {
+                    synchronized ( SHARED_INITIALIZATION_LOCK )
+                    {
+                        if ( sharedInitializationState != SharedInitializationState.IN_PROGRESS
+                                || sharedInitializationGeneration
+                                != expectedSharedInitializationGeneration )
+                        {
+                            return;
+                        }
+
+                        // Publish process-wide completion before checking this wrapper's lifecycle.
+                        // A replacement wrapper can then finish even if this one was destroyed.
+                        sharedSdkConfiguration = configuration;
+                        sharedInitializationState = SharedInitializationState.COMPLETE;
+                    }
+
+                    runOnUiThread(
+                            "complete SDK initialization",
+                            expectedLifecycleGeneration,
+                            new ActivityAction()
+                            {
+                                @Override
+                                public void run(final Activity ignored)
+                                {
+                                    completeSdkInitialization(
+                                            configuration,
+                                            expectedLifecycleGeneration,
+                                            expectedInitializationGeneration );
+                                }
+                            } );
+                }
+            } );
+        }
+        catch ( final Throwable throwable )
+        {
+            synchronized ( SHARED_INITIALIZATION_LOCK )
+            {
+                if ( sharedInitializationState == SharedInitializationState.IN_PROGRESS
+                        && sharedInitializationGeneration
+                        == expectedSharedInitializationGeneration )
+                {
+                    sharedInitializationState = SharedInitializationState.IDLE;
+                    sharedSdkConfiguration = null;
+                }
+            }
+            throw throwable;
+        }
+    }
+
+    private void scheduleSharedInitializationWait(
+            final AppLovinSdkInitializationConfiguration initializationConfiguration,
+            final long expectedLifecycleGeneration,
+            final long expectedInitializationGeneration)
+    {
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested
+                    || state != State.INITIALIZING
+                    || lifecycleGeneration != expectedLifecycleGeneration
+                    || initializationGeneration != expectedInitializationGeneration )
+            {
+                return;
+            }
+        }
+
+        mainHandler.postDelayed( new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                runOnUiThread(
+                        "wait for shared SDK initialization",
+                        expectedLifecycleGeneration,
+                        new ActivityAction()
+                        {
+                            @Override
+                            public void run(final Activity ignored)
+                            {
+                                synchronized ( lifecycleLock )
+                                {
+                                    if ( destroyRequested
+                                            || state != State.INITIALIZING
+                                            || lifecycleGeneration
+                                            != expectedLifecycleGeneration
+                                            || initializationGeneration
+                                            != expectedInitializationGeneration )
+                                    {
+                                        return;
+                                    }
+                                }
+
+                                try
+                                {
+                                    startOrJoinSdkInitialization(
+                                            initializationConfiguration,
+                                            expectedLifecycleGeneration,
+                                            expectedInitializationGeneration );
+                                }
+                                catch ( final Throwable throwable )
+                                {
+                                    synchronized ( lifecycleLock )
+                                    {
+                                        if ( !destroyRequested
+                                                && state == State.INITIALIZING
+                                                && lifecycleGeneration
+                                                == expectedLifecycleGeneration
+                                                && initializationGeneration
+                                                == expectedInitializationGeneration )
+                                        {
+                                            ++initializationGeneration;
+                                            sdk = null;
+                                            sdkConfiguration = null;
+                                            state = State.NEW;
+                                        }
+                                    }
+                                    e( "Failed to initialize AppLovin SDK: "
+                                            + Log.getStackTraceString( throwable ) );
+                                }
+                            }
+                        } );
+            }
+        }, SHARED_INITIALIZATION_WAIT_MILLIS );
+    }
+
+    private String resolveSdkKey(final String sdkKey, final Context context)
+    {
+        if ( !TextUtils.isEmpty( sdkKey ) )
+        {
+            return sdkKey;
+        }
+
+        try
+        {
+            final PackageManager packageManager = context.getPackageManager();
+            final ApplicationInfo applicationInfo = packageManager.getApplicationInfo(
+                    context.getPackageName(),
+                    PackageManager.GET_META_DATA );
+            final Bundle metaData = applicationInfo.metaData;
+            return metaData != null ? metaData.getString( "applovin.sdk.key", "" ) : "";
+        }
+        catch ( final Throwable throwable )
+        {
+            e( "Unable to retrieve SDK key from AndroidManifest.xml: " + throwable );
+            return "";
+        }
+    }
+
+    private void applyCachedSettings(final AppLovinSdkSettings settings)
+    {
+        final AppLovinTermsAndPrivacyPolicyFlowSettings consentFlowSettings =
+                settings.getTermsAndPrivacyPolicyFlowSettings();
+
+        if ( termsAndPrivacyPolicyFlowEnabledToSet != null )
+        {
+            consentFlowSettings.setEnabled( termsAndPrivacyPolicyFlowEnabledToSet );
+        }
+        if ( privacyPolicyUriToSet != null )
+        {
+            consentFlowSettings.setPrivacyPolicyUri( privacyPolicyUriToSet );
+        }
+        if ( termsOfServiceUriToSet != null )
+        {
+            consentFlowSettings.setTermsOfServiceUri( termsOfServiceUriToSet );
+        }
+        if ( debugUserGeographyToSet != null )
+        {
+            consentFlowSettings.setDebugUserGeography(
+                    getAppLovinConsentFlowUserGeography( debugUserGeographyToSet ) );
+        }
+        if ( userIdToSet != null )
+        {
+            settings.setUserIdentifier( userIdToSet );
+        }
+        if ( mutedToSet != null )
+        {
+            settings.setMuted( mutedToSet );
+        }
+        if ( verboseLoggingToSet != null )
+        {
+            settings.setVerboseLogging( verboseLoggingToSet );
+        }
+        if ( creativeDebuggerEnabledToSet != null )
+        {
+            settings.setCreativeDebuggerEnabled( creativeDebuggerEnabledToSet );
+        }
+    }
+
+    private JSONObject getInitializationMessage()
+    {
+        final JSONObject message = new JSONObject();
+        if ( sdkConfiguration != null )
+        {
+            put( message, "countryCode", emptyIfNull( sdkConfiguration.getCountryCode() ) );
+            final ConsentFlowUserGeography geography = sdkConfiguration.getConsentFlowUserGeography();
+            put( message, "consentFlowUserGeography", geography != null ? geography.ordinal() : 0 );
+            put( message, "isTestModeEnabled", sdkConfiguration.isTestModeEnabled() );
+        }
         return message;
     }
 
     public void showMediationDebugger()
     {
-        if ( sdk == null )
+        runOnUiThread( "show mediation debugger", new ActivityAction()
         {
-            Log.e( "[" + TAG + "]", "Failed to show mediation debugger - please ensure the AppLovin MAX Defold Plugin has been initialized by calling 'UAppLovinMAX::Initialize()'!" );
+            @Override
+            public void run(final Activity ignored)
+            {
+                if ( !requireReady( "show mediation debugger" ) )
+                {
+                    return;
+                }
+                sdk.showMediationDebugger();
+            }
+        } );
+    }
+
+    /**
+     * Releases all Java-side ad objects and listeners.
+     *
+     * JNI signature: destroy()V
+     */
+    public void destroy()
+    {
+        final FutureTask<Void> task;
+        final boolean shouldSchedule;
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyTask == null )
+            {
+                destroyRequested = true;
+                destroyTask = new FutureTask<>( new Callable<Void>()
+                {
+                    @Override
+                    public Void call()
+                    {
+                        performDestroyOnUiThread();
+                        return null;
+                    }
+                } );
+                shouldSchedule = true;
+            }
+            else
+            {
+                shouldSchedule = false;
+            }
+            task = destroyTask;
+        }
+
+        if ( Looper.myLooper() == Looper.getMainLooper() )
+        {
+            task.run();
             return;
         }
 
-        sdk.showMediationDebugger();
+        if ( shouldSchedule && !mainHandler.post( task ) )
+        {
+            // The main looper is already shutting down. Finish releasing Java references even
+            // though window operations may no longer be serviced.
+            task.run();
+        }
+        waitForDestroy( task );
+    }
+
+    private void performDestroyOnUiThread()
+    {
+        synchronized ( lifecycleLock )
+        {
+            state = State.DESTROYED;
+            ++lifecycleGeneration;
+            ++initializationGeneration;
+        }
+
+        final Activity activity = gameActivity.get();
+
+        for ( final MaxInterstitialAd interstitial : new ArrayList<>( mInterstitials.values() ) )
+        {
+            try
+            {
+                interstitial.setListener( null );
+                interstitial.setRevenueListener( null );
+                interstitial.destroy();
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Failed to destroy interstitial: " + throwable );
+            }
+        }
+        mInterstitials.clear();
+
+        for ( final MaxRewardedAd rewardedAd : new ArrayList<>( mRewardedAds.values() ) )
+        {
+            try
+            {
+                rewardedAd.setListener( null );
+                rewardedAd.setRevenueListener( null );
+                rewardedAd.destroy();
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Failed to destroy rewarded ad: " + throwable );
+            }
+        }
+        mRewardedAds.clear();
+
+        for ( final MaxAdView adView : new ArrayList<>( mAdViews.values() ) )
+        {
+            try
+            {
+                removeAndDestroyAdView( adView, activity );
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Failed to destroy ad view: " + throwable );
+            }
+        }
+        mAdViews.clear();
+        mAdViewAdFormats.clear();
+        mAdViewPlacements.clear();
+        mAdViewExtraParameters.clear();
+        mAdViewPositions.clear();
+        mAdViewGenerations.clear();
+        mAdUnitIdsToShowAfterCreate.clear();
+        mAdUnitIdsWithStoppedAutoRefresh.clear();
+
+        sdk = null;
+        sdkConfiguration = null;
+        userIdToSet = null;
+        mutedToSet = null;
+        testDeviceAdvertisingIdsToSet = null;
+        verboseLoggingToSet = null;
+        creativeDebuggerEnabledToSet = null;
+        termsAndPrivacyPolicyFlowEnabledToSet = null;
+        privacyPolicyUriToSet = null;
+        termsOfServiceUriToSet = null;
+        debugUserGeographyToSet = null;
+        gameActivity.clear();
+    }
+
+    private void waitForDestroy(final FutureTask<Void> task)
+    {
+        boolean interrupted = false;
+        while ( !task.isDone() )
+        {
+            try
+            {
+                task.get();
+            }
+            catch ( final InterruptedException exception )
+            {
+                interrupted = true;
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Failed to finish MAX teardown: " + throwable );
+                break;
+            }
+        }
+        if ( interrupted )
+        {
+            Thread.currentThread().interrupt();
+        }
     }
     // endregion
 
     // region Privacy
     public void setHasUserConsent(final boolean hasUserConsent)
     {
-        AppLovinPrivacySettings.setHasUserConsent( hasUserConsent, getGameActivity() );
+        runOnUiThread( "set user consent", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                AppLovinPrivacySettings.setHasUserConsent( hasUserConsent );
+            }
+        } );
     }
 
     public boolean hasUserConsent()
     {
-        return AppLovinPrivacySettings.hasUserConsent( getGameActivity() );
+        return callOnUiThread( "get user consent", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                return AppLovinPrivacySettings.hasUserConsent();
+            }
+        } );
     }
 
     public void setDoNotSell(final boolean doNotSell)
     {
-        AppLovinPrivacySettings.setDoNotSell( doNotSell, getGameActivity() );
+        runOnUiThread( "set do-not-sell", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                AppLovinPrivacySettings.setDoNotSell( doNotSell );
+            }
+        } );
     }
 
     public boolean isDoNotSell()
     {
-        return AppLovinPrivacySettings.isDoNotSell( getGameActivity() );
+        return callOnUiThread( "get do-not-sell", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                return AppLovinPrivacySettings.isDoNotSell();
+            }
+        } );
     }
     // endregion
 
     // region General
     public boolean isTablet()
     {
-        return AppLovinSdkUtils.isTablet( getGameActivity() );
+        return callOnUiThread( "check tablet form factor", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity activity)
+            {
+                return AppLovinSdkUtils.isTablet( activity );
+            }
+        } );
     }
 
-    public void setUserId(String userId)
+    public void setUserId(final String userId)
     {
-        if ( isPluginInitialized )
+        runOnUiThread( "set user ID", new ActivityAction()
         {
-            sdk.setUserIdentifier( userId );
-            userIdToSet = null;
-        }
-        else
-        {
-            userIdToSet = userId;
-        }
+            @Override
+            public void run(final Activity ignored)
+            {
+                userIdToSet = userId;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().setUserIdentifier( userId );
+                }
+            }
+        } );
     }
 
     public void setMuted(final boolean muted)
     {
-        if ( isPluginInitialized )
+        runOnUiThread( "set muted", new ActivityAction()
         {
-            sdk.getSettings().setMuted( muted );
-            mutedToSet = null;
-        }
-        else
-        {
-            mutedToSet = muted;
-        }
+            @Override
+            public void run(final Activity ignored)
+            {
+                mutedToSet = muted;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().setMuted( muted );
+                }
+            }
+        } );
     }
 
     public boolean isMuted()
     {
-        if ( !isPluginInitialized ) return false;
-
-        return sdk.getSettings().isMuted();
+        return callOnUiThread( "get muted", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                return sdk != null ? sdk.getSettings().isMuted() : mutedToSet != null && mutedToSet;
+            }
+        } );
     }
 
     public void setVerboseLoggingEnabled(final boolean enabled)
     {
-        if ( isPluginInitialized )
+        runOnUiThread( "set verbose logging", new ActivityAction()
         {
-            sdk.getSettings().setVerboseLogging( enabled );
-            verboseLoggingToSet = null;
-        }
-        else
-        {
-            verboseLoggingToSet = enabled;
-        }
+            @Override
+            public void run(final Activity ignored)
+            {
+                verboseLoggingToSet = enabled;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().setVerboseLogging( enabled );
+                }
+            }
+        } );
     }
 
     public boolean isVerboseLoggingEnabled()
     {
-        if ( isPluginInitialized )
-        {
-            return sdk.getSettings().isVerboseLoggingEnabled();
-        }
-        else if ( verboseLoggingToSet != null )
-        {
-            return verboseLoggingToSet;
-        }
-
-        return false;
+        return callOnUiThread(
+                "get verbose logging",
+                false,
+                new ActivityCallable<Boolean>()
+                {
+                    @Override
+                    public Boolean call(final Activity ignored)
+                    {
+                        return sdk != null
+                                ? sdk.getSettings().isVerboseLoggingEnabled()
+                                : verboseLoggingToSet != null && verboseLoggingToSet;
+                    }
+                } );
     }
 
     public void setCreativeDebuggerEnabled(final boolean enabled)
     {
-        if ( isPluginInitialized )
+        runOnUiThread( "set creative debugger", new ActivityAction()
         {
-            sdk.getSettings().setCreativeDebuggerEnabled( enabled );
-            creativeDebuggerEnabledToSet = null;
-        }
-        else
-        {
-            creativeDebuggerEnabledToSet = enabled;
-        }
+            @Override
+            public void run(final Activity ignored)
+            {
+                creativeDebuggerEnabledToSet = enabled;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().setCreativeDebuggerEnabled( enabled );
+                }
+            }
+        } );
     }
 
     public void setTestDeviceAdvertisingIds(final String[] advertisingIds)
     {
-        if ( isPluginInitialized )
+        final List<String> advertisingIdList = advertisingIds == null
+                ? Collections.<String>emptyList()
+                : new ArrayList<>( Arrays.asList( advertisingIds ) );
+
+        runOnUiThread( "set test device advertising IDs", new ActivityAction()
         {
-            sdk.getSettings().setTestDeviceAdvertisingIds( Arrays.asList( advertisingIds ) );
-            testDeviceAdvertisingIdsToSet = null;
-        }
-        else
-        {
-            testDeviceAdvertisingIdsToSet = Arrays.asList( advertisingIds );
-        }
+            @Override
+            public void run(final Activity ignored)
+            {
+                if ( state != State.NEW )
+                {
+                    e( "Test device advertising IDs must be set before initialize()" );
+                    return;
+                }
+                testDeviceAdvertisingIdsToSet = advertisingIdList;
+            }
+        } );
     }
     // endregion
 
     // region Terms and Privacy Policy Flow
     public void setTermsAndPrivacyPolicyFlowEnabled(final boolean enabled)
     {
-        termsAndPrivacyPolicyFlowEnabledToSet = enabled;
+        runOnUiThread( "set terms and privacy policy flow", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                termsAndPrivacyPolicyFlowEnabledToSet = enabled;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setEnabled( enabled );
+                }
+            }
+        } );
     }
 
     public void setPrivacyPolicyUrl(final String urlString)
     {
-        privacyPolicyUriToSet = Uri.parse( urlString );
+        runOnUiThread( "set privacy policy URL", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                privacyPolicyUriToSet = Uri.parse( urlString );
+                if ( sdk != null )
+                {
+                    sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings()
+                            .setPrivacyPolicyUri( privacyPolicyUriToSet );
+                }
+            }
+        } );
     }
 
     public void setTermsOfServiceUrl(final String urlString)
     {
-        termsOfServiceUriToSet = Uri.parse( urlString );
+        runOnUiThread( "set terms of service URL", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                termsOfServiceUriToSet = Uri.parse( urlString );
+                if ( sdk != null )
+                {
+                    sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings()
+                            .setTermsOfServiceUri( termsOfServiceUriToSet );
+                }
+            }
+        } );
     }
 
     public void setConsentFlowDebugUserGeography(final String userGeography)
     {
-        debugUserGeographyToSet = userGeography;
+        runOnUiThread( "set consent flow debug geography", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                debugUserGeographyToSet = userGeography;
+                if ( sdk != null )
+                {
+                    sdk.getSettings().getTermsAndPrivacyPolicyFlowSettings().setDebugUserGeography(
+                            getAppLovinConsentFlowUserGeography( userGeography ) );
+                }
+            }
+        } );
     }
 
     public void showCmpForExistingUser()
     {
-        if ( isPluginInitialized )
+        runOnUiThread( "show CMP for existing user", new ActivityAction()
         {
-            sdk.getCmpService().showCmpForExistingUser( getGameActivity(), this );
-        }
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( !requireReady( "show CMP for existing user" ) )
+                {
+                    return;
+                }
+                sdk.getCmpService().showCmpForExistingUser( activity, MaxDefoldPlugin.this );
+            }
+        } );
     }
 
     public boolean hasSupportedCmp()
     {
-        if ( !isPluginInitialized ) return false;
-
-        return sdk.getCmpService().hasSupportedCmp();
+        return callOnUiThread( "check supported CMP", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                return state == State.READY && sdk != null && sdk.getCmpService().hasSupportedCmp();
+            }
+        } );
     }
 
     @Override
     public void onCompleted(final AppLovinCmpError error)
     {
-        JSONObject params = new JSONObject();
-        if ( error != null )
+        if ( repostCallbackToUi( "CMP completion callback", new Runnable()
         {
-            JsonUtils.putInt( params, "code", error.getCode().getValue() );
-            JsonUtils.putString( params, "message", error.getMessage() );
-            JsonUtils.putInt( params, "cmpCode", error.getCmpCode() );
-            JsonUtils.putString( params, "cmpMessage", error.getCmpMessage() );
+            @Override
+            public void run()
+            {
+                onCompleted( error );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
         }
 
+        handleCmpCompletion( error );
+    }
+
+    private void handleCmpCompletion(final AppLovinCmpError error)
+    {
+        if ( !canHandleCallback() )
+        {
+            return;
+        }
+
+        final JSONObject params = new JSONObject();
+        if ( error != null )
+        {
+            put( params, "code", error.getCode().getValue() );
+            put( params, "message", emptyIfNull( error.getMessage() ) );
+            put( params, "cmpCode", error.getCmpCode() );
+            put( params, "cmpMessage", emptyIfNull( error.getCmpMessage() ) );
+        }
         sendDefoldEvent( "OnCmpCompletedEvent", params );
     }
     // endregion
@@ -424,62 +1131,144 @@ public class MaxDefoldPlugin
     // region Event Tracking
     public void trackEvent(final String event, final String parameters)
     {
-        if ( sdk == null ) return;
-
-        final Map<String, String> deserialized = deserialize( parameters );
-        sdk.getEventService().trackEvent( event, deserialized );
+        final Map<String, Object> deserialized = deserialize( parameters );
+        runOnUiThread( "track event", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                if ( requireReady( "track event" ) )
+                {
+                    sdk.getEventService().trackEvent( event, deserialized );
+                }
+            }
+        } );
     }
     // endregion
 
     // region Interstitials
     public void loadInterstitial(final String adUnitId)
     {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.loadAd();
+        runOnUiThread( "load interstitial", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "load interstitial" ) )
+                {
+                    retrieveInterstitial( adUnitId, activity ).loadAd();
+                }
+            }
+        } );
     }
 
-    public boolean isInterstitialReady(String adUnitId)
+    public boolean isInterstitialReady(final String adUnitId)
     {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        return interstitial.isReady();
+        return callOnUiThread( "check interstitial readiness", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                final MaxInterstitialAd interstitial = mInterstitials.get( adUnitId );
+                return state == State.READY && interstitial != null && interstitial.isReady();
+            }
+        } );
     }
 
     public void showInterstitial(final String adUnitId, final String placement)
     {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.showAd( placement );
+        runOnUiThread( "show interstitial", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "show interstitial" ) )
+                {
+                    retrieveInterstitial( adUnitId, activity ).showAd( placement, activity );
+                }
+            }
+        } );
     }
 
-    public void setInterstitialExtraParameter(final String adUnitId, final String key, final String value)
+    public void setInterstitialExtraParameter(
+            final String adUnitId,
+            final String key,
+            final String value)
     {
-        MaxInterstitialAd interstitial = retrieveInterstitial( adUnitId );
-        interstitial.setExtraParameter( key, value );
+        runOnUiThread( "set interstitial extra parameter", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "set interstitial extra parameter" ) )
+                {
+                    retrieveInterstitial( adUnitId, activity ).setExtraParameter( key, value );
+                }
+            }
+        } );
     }
     // endregion
 
     // region Rewarded
     public void loadRewardedAd(final String adUnitId)
     {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.loadAd();
+        runOnUiThread( "load rewarded ad", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "load rewarded ad" ) )
+                {
+                    retrieveRewardedAd( adUnitId, activity ).loadAd();
+                }
+            }
+        } );
     }
 
     public boolean isRewardedAdReady(final String adUnitId)
     {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        return rewardedAd.isReady();
+        return callOnUiThread( "check rewarded ad readiness", false, new ActivityCallable<Boolean>()
+        {
+            @Override
+            public Boolean call(final Activity ignored)
+            {
+                final MaxRewardedAd rewardedAd = mRewardedAds.get( adUnitId );
+                return state == State.READY && rewardedAd != null && rewardedAd.isReady();
+            }
+        } );
     }
 
     public void showRewardedAd(final String adUnitId, final String placement)
     {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.showAd( placement );
+        runOnUiThread( "show rewarded ad", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "show rewarded ad" ) )
+                {
+                    retrieveRewardedAd( adUnitId, activity ).showAd( placement, activity );
+                }
+            }
+        } );
     }
 
-    public void setRewardedAdExtraParameter(final String adUnitId, final String key, final String value)
+    public void setRewardedAdExtraParameter(
+            final String adUnitId,
+            final String key,
+            final String value)
     {
-        MaxRewardedAd rewardedAd = retrieveRewardedAd( adUnitId );
-        rewardedAd.setExtraParameter( key, value );
+        runOnUiThread( "set rewarded ad extra parameter", new ActivityAction()
+        {
+            @Override
+            public void run(final Activity activity)
+            {
+                if ( requireReady( "set rewarded ad extra parameter" ) )
+                {
+                    retrieveRewardedAd( adUnitId, activity ).setExtraParameter( key, value );
+                }
+            }
+        } );
     }
     // endregion
 
@@ -501,7 +1290,7 @@ public class MaxDefoldPlugin
 
     public void setBannerExtraParameter(final String adUnitId, final String key, final String value)
     {
-        setAdViewExtraParameters( adUnitId, getDeviceSpecificBannerAdViewAdFormat(), key, value );
+        setAdViewExtraParameter( adUnitId, getDeviceSpecificBannerAdViewAdFormat(), key, value );
     }
 
     public void updateBannerPosition(final String adUnitId, final String bannerPosition)
@@ -535,7 +1324,7 @@ public class MaxDefoldPlugin
     }
     // endregion
 
-    // region MRECS
+    // region MRECs
     public void createMRec(final String adUnitId, final String mrecPosition)
     {
         createAdView( adUnitId, MaxAdFormat.MREC, mrecPosition );
@@ -548,7 +1337,7 @@ public class MaxDefoldPlugin
 
     public void setMRecExtraParameter(final String adUnitId, final String key, final String value)
     {
-        setAdViewExtraParameters( adUnitId, MaxAdFormat.MREC, key, value );
+        setAdViewExtraParameter( adUnitId, MaxAdFormat.MREC, key, value );
     }
 
     public void updateMRecPosition(final String adUnitId, final String mrecPosition)
@@ -584,25 +1373,35 @@ public class MaxDefoldPlugin
 
     // region Ad Callbacks
     @Override
-    public void onAdLoaded(MaxAd ad)
+    public void onAdLoaded(final MaxAd ad)
     {
-        String name;
-        MaxAdFormat adFormat = ad.getFormat();
+        if ( repostCallbackToUi( "ad loaded callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdLoaded( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
+        final String name;
+        final MaxAdFormat adFormat = ad.getFormat();
         if ( adFormat.isAdViewAd() )
         {
-            name = ( MaxAdFormat.MREC == adFormat ) ? "OnMRecAdLoadedEvent" : "OnBannerAdLoadedEvent";
+            name = MaxAdFormat.MREC == adFormat
+                    ? "OnMRecAdLoadedEvent"
+                    : "OnBannerAdLoadedEvent";
 
-            String adViewPosition = mAdViewPositions.get( ad.getAdUnitId() );
-            if ( !TextUtils.isEmpty( adViewPosition ) )
+            if ( !TextUtils.isEmpty( mAdViewPositions.get( ad.getAdUnitId() ) ) )
             {
-                // Only position ad if not native UI component
-                positionAdView( ad );
+                positionAdView( ad.getAdUnitId(), adFormat, gameActivity.get() );
             }
 
-            // Do not auto-refresh by default if the ad view is not showing yet (e.g. first load during app launch and publisher does not automatically show banner upon load success)
-            // We will resume auto-refresh in {@link #showBanner(String)}.
-            MaxAdView adView = retrieveAdView( ad.getAdUnitId(), adFormat );
-            if ( adView != null && adView.getVisibility() != View.VISIBLE )
+            final MaxAdView adView = mAdViews.get( ad.getAdUnitId() );
+            if ( adView != null && !isAdViewVisible( adView ) )
             {
                 adView.stopAutoRefresh();
             }
@@ -627,16 +1426,30 @@ public class MaxDefoldPlugin
     @Override
     public void onAdLoadFailed(final String adUnitId, final MaxError error)
     {
-        if ( TextUtils.isEmpty( adUnitId ) )
+        if ( repostCallbackToUi( "ad load failed callback", new Runnable()
         {
-            logStackTrace( new IllegalArgumentException( "adUnitId cannot be null" ) );
+            @Override
+            public void run()
+            {
+                onAdLoadFailed( adUnitId, error );
+            }
+        } ) || !canHandleCallback() )
+        {
             return;
         }
 
-        String name;
+        if ( TextUtils.isEmpty( adUnitId ) )
+        {
+            logStackTrace( new IllegalArgumentException( "adUnitId cannot be null or empty" ) );
+            return;
+        }
+
+        final String name;
         if ( mAdViews.containsKey( adUnitId ) )
         {
-            name = ( MaxAdFormat.MREC == mAdViewAdFormats.get( adUnitId ) ) ? "OnMRecAdLoadFailedEvent" : "OnBannerAdLoadFailedEvent";
+            name = MaxAdFormat.MREC == mAdViewAdFormats.get( adUnitId )
+                    ? "OnMRecAdLoadFailedEvent"
+                    : "OnBannerAdLoadFailedEvent";
         }
         else if ( mInterstitials.containsKey( adUnitId ) )
         {
@@ -648,19 +1461,30 @@ public class MaxDefoldPlugin
         }
         else
         {
-            logStackTrace( new IllegalStateException( "invalid adUnitId: " + adUnitId ) );
+            logStackTrace( new IllegalStateException( "Invalid ad unit ID: " + adUnitId ) );
             return;
         }
 
-        JSONObject params = getErrorInfo( error );
-        JsonUtils.putString( params, "adUnitIdentifier", adUnitId );
-
+        final JSONObject params = getLoadErrorInfo( error );
+        put( params, "adUnitIdentifier", adUnitId );
         sendDefoldEvent( name, params );
     }
 
     @Override
     public void onAdClicked(final MaxAd ad)
     {
+        if ( repostCallbackToUi( "ad clicked callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdClicked( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
         final String name;
         if ( MaxAdFormat.BANNER == adFormat || MaxAdFormat.LEADER == adFormat )
@@ -684,131 +1508,194 @@ public class MaxDefoldPlugin
             logInvalidAdFormat( adFormat );
             return;
         }
-
         sendDefoldEvent( name, getAdInfo( ad ) );
     }
 
     @Override
     public void onAdDisplayed(final MaxAd ad)
     {
-        // BMLs do not support [DISPLAY] events
+        if ( repostCallbackToUi( "ad displayed callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdDisplayed( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.INTERSTITIAL && adFormat != MaxAdFormat.REWARDED ) return;
-
-        final String name;
-        if ( MaxAdFormat.INTERSTITIAL == adFormat )
+        if ( adFormat == MaxAdFormat.INTERSTITIAL )
         {
-            name = "OnInterstitialAdDisplayedEvent";
+            sendDefoldEvent( "OnInterstitialAdDisplayedEvent", getAdInfo( ad ) );
         }
-        else // REWARDED
+        else if ( adFormat == MaxAdFormat.REWARDED )
         {
-            name = "OnRewardedAdDisplayedEvent";
+            sendDefoldEvent( "OnRewardedAdDisplayedEvent", getAdInfo( ad ) );
         }
-
-        sendDefoldEvent( name, getAdInfo( ad ) );
     }
 
     @Override
     public void onAdDisplayFailed(final MaxAd ad, final MaxError error)
     {
-        // BMLs do not support [DISPLAY] events
-        final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.INTERSTITIAL && adFormat != MaxAdFormat.REWARDED ) return;
+        if ( repostCallbackToUi( "ad display failed callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdDisplayFailed( ad, error );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
 
+        final MaxAdFormat adFormat = ad.getFormat();
         final String name;
-        if ( MaxAdFormat.INTERSTITIAL == adFormat )
+        if ( adFormat == MaxAdFormat.INTERSTITIAL )
         {
             name = "OnInterstitialAdDisplayFailedEvent";
         }
-        else // REWARDED
+        else if ( adFormat == MaxAdFormat.REWARDED )
         {
             name = "OnRewardedAdDisplayFailedEvent";
         }
+        else
+        {
+            return;
+        }
 
-        JSONObject params = getAdInfo( ad );
-        JsonUtils.putAll( params, getErrorInfo( error ) );
-
+        final JSONObject params = getDisplayErrorInfo( error );
+        merge( params, getAdInfo( ad ) );
         sendDefoldEvent( name, params );
     }
 
     @Override
     public void onAdHidden(final MaxAd ad)
     {
-        // BMLs do not support [HIDDEN] events
+        if ( repostCallbackToUi( "ad hidden callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdHidden( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.INTERSTITIAL && adFormat != MaxAdFormat.REWARDED ) return;
-
-        String name;
-        if ( MaxAdFormat.INTERSTITIAL == adFormat )
+        if ( adFormat == MaxAdFormat.INTERSTITIAL )
         {
-            name = "OnInterstitialAdHiddenEvent";
+            sendDefoldEvent( "OnInterstitialAdHiddenEvent", getAdInfo( ad ) );
         }
-        else // REWARDED
+        else if ( adFormat == MaxAdFormat.REWARDED )
         {
-            name = "OnRewardedAdHiddenEvent";
+            sendDefoldEvent( "OnRewardedAdHiddenEvent", getAdInfo( ad ) );
         }
-
-        sendDefoldEvent( name, getAdInfo( ad ) );
     }
 
     @Override
     public void onAdExpanded(final MaxAd ad)
     {
+        if ( repostCallbackToUi( "ad expanded callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdExpanded( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
         if ( !adFormat.isAdViewAd() )
         {
             logInvalidAdFormat( adFormat );
             return;
         }
-
-        sendDefoldEvent( ( MaxAdFormat.MREC == adFormat ) ? "OnMrecAdExpandedEvent" : "OnBannerAdExpandedEvent", getAdInfo( ad ) );
+        sendDefoldEvent(
+                MaxAdFormat.MREC == adFormat
+                        ? "OnMRecAdExpandedEvent"
+                        : "OnBannerAdExpandedEvent",
+                getAdInfo( ad ) );
     }
 
     @Override
     public void onAdCollapsed(final MaxAd ad)
     {
+        if ( repostCallbackToUi( "ad collapsed callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdCollapsed( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
         if ( !adFormat.isAdViewAd() )
         {
             logInvalidAdFormat( adFormat );
             return;
         }
-
-        sendDefoldEvent( ( MaxAdFormat.MREC == adFormat ) ? "OnMRecAdCollapsedEvent" : "OnBannerAdCollapsedEvent", getAdInfo( ad ) );
-    }
-
-    @Override
-    public void onRewardedVideoCompleted(final MaxAd ad)
-    {
-        // This event is not forwarded
-    }
-
-    @Override
-    public void onRewardedVideoStarted(final MaxAd ad)
-    {
-        // This event is not forwarded
+        sendDefoldEvent(
+                MaxAdFormat.MREC == adFormat
+                        ? "OnMRecAdCollapsedEvent"
+                        : "OnBannerAdCollapsedEvent",
+                getAdInfo( ad ) );
     }
 
     @Override
     public void onUserRewarded(final MaxAd ad, final MaxReward reward)
     {
-        final MaxAdFormat adFormat = ad.getFormat();
-        if ( adFormat != MaxAdFormat.REWARDED )
+        if ( repostCallbackToUi( "user rewarded callback", new Runnable()
         {
-            logInvalidAdFormat( adFormat );
+            @Override
+            public void run()
+            {
+                onUserRewarded( ad, reward );
+            }
+        } ) || !canHandleCallback() )
+        {
             return;
         }
 
-        JSONObject params = getAdInfo( ad );
-        JsonUtils.putString( params, "label", reward != null ? reward.getLabel() : "" );
-        JsonUtils.putInt( params, "amount", reward != null ? reward.getAmount() : 0 );
+        if ( ad.getFormat() != MaxAdFormat.REWARDED )
+        {
+            logInvalidAdFormat( ad.getFormat() );
+            return;
+        }
 
+        final JSONObject params = getAdInfo( ad );
+        put( params, "label", reward != null ? emptyIfNull( reward.getLabel() ) : "" );
+        put( params, "amount", reward != null ? reward.getAmount() : 0 );
         sendDefoldEvent( "OnRewardedAdReceivedRewardEvent", params );
     }
 
     @Override
     public void onAdRevenuePaid(final MaxAd ad)
     {
+        if ( repostCallbackToUi( "ad revenue callback", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                onAdRevenuePaid( ad );
+            }
+        } ) || !canHandleCallback() )
+        {
+            return;
+        }
+
         final MaxAdFormat adFormat = ad.getFormat();
         final String name;
         if ( MaxAdFormat.BANNER == adFormat || MaxAdFormat.LEADER == adFormat )
@@ -832,152 +1719,239 @@ public class MaxDefoldPlugin
             logInvalidAdFormat( adFormat );
             return;
         }
-
         sendDefoldEvent( name, getAdInfo( ad ) );
     }
+    // endregion
 
-    // region Internal Methods
-    private void createAdView(final String adUnitId, final MaxAdFormat adFormat, final String adViewPosition)
+    // region Internal Ad Methods
+    private void createAdView(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final String adViewPosition)
     {
-        // Run on main thread to ensure there are no concurrency issues with other ad view methods
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "create " + adFormat.getLabel(), new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity activity)
             {
-                d( "Creating " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\" and position: \"" + adViewPosition + "\"" );
-
-                // Retrieve ad view from the map
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat, adViewPosition );
-                if ( adView == null )
+                if ( !requireReady( "create " + adFormat.getLabel() ) )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
                     return;
                 }
 
-                if ( adView.getParent() == null )
+                d( "Creating " + adFormat.getLabel() + " with ad unit ID \"" + adUnitId
+                        + "\" at position \"" + adViewPosition + "\"" );
+
+                final MaxAdView existingAdView = mAdViews.get( adUnitId );
+                if ( existingAdView != null )
                 {
-                    final Activity currentActivity = getGameActivity();
-                    final RelativeLayout relativeLayout = new RelativeLayout( currentActivity );
-                    relativeLayout.setVisibility( View.GONE );
-                    relativeLayout.addView( adView );
-
-                    WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
-                    layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
-                    layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
-                    layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-
-                    currentActivity.getWindowManager().addView( relativeLayout, layoutParams );
-
-                    // Position ad view immediately so if publisher sets color before ad loads, it will not be the size of the screen
-                    mAdViewAdFormats.put( adUnitId, adFormat );
-                    positionAdView( adUnitId, adFormat );
+                    final String previousPosition = mAdViewPositions.get( adUnitId );
+                    if ( !TextUtils.isEmpty( adViewPosition )
+                            && !adViewPosition.equals( previousPosition ) )
+                    {
+                        mAdViewPositions.put( adUnitId, adViewPosition );
+                        positionAdView(
+                                adUnitId,
+                                getEffectiveAdViewAdFormat( adUnitId, adFormat ),
+                                activity );
+                    }
+                    return;
                 }
 
-                adView.loadAd();
-
-                // The publisher may have requested to show the banner before it was created. Now that the banner is created, show it.
-                if ( mAdUnitIdsToShowAfterCreate.contains( adUnitId ) )
+                final MaxAdFormat creationAdFormat =
+                        getAdViewAdFormatForCreation( adUnitId, adFormat, activity );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        creationAdFormat,
+                        adViewPosition,
+                        true );
+                if ( adView == null )
                 {
-                    showAdView( adUnitId, adFormat );
-                    mAdUnitIdsToShowAfterCreate.remove( adUnitId );
+                    return;
                 }
+
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, creationAdFormat );
+                final Long creationGeneration = mAdViewGenerations.get( adUnitId );
+                try
+                {
+                    if ( adView.getParent() == null )
+                    {
+                        final RelativeLayout container = new RelativeLayout( activity );
+                        container.setVisibility( View.GONE );
+                        container.addView( adView );
+
+                        final WindowManager.LayoutParams layoutParams =
+                                new WindowManager.LayoutParams();
+                        layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+                        layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+                        layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                                | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                        activity.getWindowManager().addView( container, layoutParams );
+
+                        positionAdView( adUnitId, effectiveAdFormat, activity );
+                    }
+                }
+                catch ( final Throwable throwable )
+                {
+                    rollbackCreatedAdView(
+                            adUnitId,
+                            adView,
+                            creationGeneration,
+                            activity );
+                    throw throwable;
+                }
+
+                if ( mAdUnitIdsToShowAfterCreate.remove( adUnitId ) )
+                {
+                    showAdViewNow( adUnitId, effectiveAdFormat );
+                }
+
+                // Defer the first load by one UI turn so immediately following placement and
+                // extra-parameter calls are applied to the request.
+                postOnUiThread( "load " + effectiveAdFormat.getLabel(), new ActivityAction()
+                {
+                    @Override
+                    public void run(final Activity ignored)
+                    {
+                        if ( requireReady( "load " + effectiveAdFormat.getLabel() )
+                                && mAdViews.get( adUnitId ) == adView )
+                        {
+                            adView.loadAd();
+                        }
+                    }
+                } );
             }
         } );
     }
 
-    private void setAdViewPlacement(final String adUnitId, final MaxAdFormat adFormat, final String placement)
+    private void setAdViewPlacement(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final String placement)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "set ad view placement", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity ignored)
             {
-                d( "Setting placement \"" + placement + "\" for " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
-
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                mAdViewPlacements.put( adUnitId, placement );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
                     return;
                 }
-
                 adView.setPlacement( placement );
             }
         } );
     }
 
-    private void updateAdViewPosition(final String adUnitId, final String adViewPosition, final MaxAdFormat adFormat)
+    private void updateAdViewPosition(
+            final String adUnitId,
+            final String adViewPosition,
+            final MaxAdFormat adFormat)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "update ad view position", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity activity)
             {
-                d( "Updating " + adFormat.getLabel() + " position to \"" + adViewPosition + "\" for ad unit id \"" + adUnitId + "\"" );
-
-                // Retrieve ad view from the map
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
+                    logMissingAdView( adUnitId, effectiveAdFormat );
                     return;
                 }
 
-                // Check if the previous position is same as the new position. If so, no need to update the position again.
                 final String previousPosition = mAdViewPositions.get( adUnitId );
-                if ( adViewPosition == null || adViewPosition.equals( previousPosition ) ) return;
+                if ( adViewPosition == null || adViewPosition.equals( previousPosition ) )
+                {
+                    return;
+                }
 
                 mAdViewPositions.put( adUnitId, adViewPosition );
-                positionAdView( adUnitId, adFormat );
+                positionAdView( adUnitId, effectiveAdFormat, activity );
             }
         } );
     }
 
     private void showAdView(final String adUnitId, final MaxAdFormat adFormat)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "show ad view", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity ignored)
             {
-                d( "Showing " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
-
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
-                if ( adView == null )
-                {
-                    e( adFormat.getLabel() + " does not exist for ad unit id " + adUnitId );
-
-                    // The adView has not yet been created. Store the ad unit ID, so that it can be displayed once the banner has been created.
-                    mAdUnitIdsToShowAfterCreate.add( adUnitId );
-                    return;
-                }
-
-                RelativeLayout relativeLayout = (RelativeLayout) adView.getParent();
-                relativeLayout.setVisibility( View.VISIBLE );
-                adView.startAutoRefresh();
+                showAdViewNow( adUnitId, adFormat );
             }
         } );
     }
 
+    private void showAdViewNow(final String adUnitId, final MaxAdFormat adFormat)
+    {
+        final MaxAdFormat effectiveAdFormat =
+                getEffectiveAdViewAdFormat( adUnitId, adFormat );
+        final MaxAdView adView = retrieveAdView(
+                adUnitId,
+                effectiveAdFormat,
+                null,
+                false );
+        if ( adView == null )
+        {
+            mAdUnitIdsToShowAfterCreate.add( adUnitId );
+            return;
+        }
+
+        adView.setVisibility( View.VISIBLE );
+        final ViewParent parent = adView.getParent();
+        if ( parent instanceof View )
+        {
+            ( (View) parent ).setVisibility( View.VISIBLE );
+        }
+        if ( !mAdUnitIdsWithStoppedAutoRefresh.contains( adUnitId ) )
+        {
+            adView.startAutoRefresh();
+        }
+    }
+
     private void hideAdView(final String adUnitId, final MaxAdFormat adFormat)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "hide ad view", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity ignored)
             {
-                d( "Hiding " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
                 mAdUnitIdsToShowAfterCreate.remove( adUnitId );
-
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
+                    logMissingAdView( adUnitId, effectiveAdFormat );
                     return;
                 }
 
-                adView.setVisibility( View.GONE );
+                final ViewParent parent = adView.getParent();
+                if ( parent instanceof View )
+                {
+                    ( (View) parent ).setVisibility( View.GONE );
+                }
                 adView.stopAutoRefresh();
             }
         } );
@@ -985,30 +1959,30 @@ public class MaxDefoldPlugin
 
     private void destroyAdView(final String adUnitId, final MaxAdFormat adFormat)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "destroy ad view", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity activity)
             {
-                d( "Destroying " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
-
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                mAdUnitIdsToShowAfterCreate.remove( adUnitId );
+                mAdUnitIdsWithStoppedAutoRefresh.remove( adUnitId );
+                mAdViewPlacements.remove( adUnitId );
+                mAdViewExtraParameters.remove( adUnitId );
+                mAdViewGenerations.remove( adUnitId );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
+                    logMissingAdView( adUnitId, effectiveAdFormat );
                     return;
                 }
 
-                final ViewParent parent = adView.getParent();
-                if ( parent instanceof ViewGroup )
-                {
-                    getGameActivity().getWindowManager().removeView( (View) parent );
-                }
-
-                adView.setListener( null );
-                adView.setRevenueListener( null );
-                adView.destroy();
-
+                removeAndDestroyAdView( adView, activity );
                 mAdViews.remove( adUnitId );
                 mAdViewAdFormats.remove( adUnitId );
                 mAdViewPositions.remove( adUnitId );
@@ -1016,63 +1990,151 @@ public class MaxDefoldPlugin
         } );
     }
 
-    private void setAdViewBackgroundColor(final String adUnitId, final MaxAdFormat adFormat, final String hexColorCode)
+    private void removeAndDestroyAdView(final MaxAdView adView, final Activity activity)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        try
+        {
+            final ViewParent parent = adView.getParent();
+            if ( parent instanceof ViewGroup )
+            {
+                final View parentView = (View) parent;
+                Activity windowActivity = activity;
+                if ( windowActivity == null && parentView.getContext() instanceof Activity )
+                {
+                    windowActivity = (Activity) parentView.getContext();
+                }
+
+                if ( windowActivity != null )
+                {
+                    try
+                    {
+                        // The container can be registered with WindowManager before its first
+                        // traversal assigns a window token, so removal must not depend on one.
+                        windowActivity.getWindowManager().removeView( parentView );
+                    }
+                    catch ( final Throwable windowRemovalThrowable )
+                    {
+                        if ( !( windowRemovalThrowable instanceof IllegalArgumentException ) )
+                        {
+                            e( "Failed to remove ad view container from its window: "
+                                    + windowRemovalThrowable );
+                        }
+                        ( (ViewGroup) parent ).removeView( adView );
+                    }
+                }
+                else
+                {
+                    ( (ViewGroup) parent ).removeView( adView );
+                }
+            }
+        }
+        catch ( final Throwable throwable )
+        {
+            e( "Failed to remove ad view from its window: " + throwable );
+        }
+        finally
+        {
+            try
+            {
+                adView.setListener( null );
+                adView.setRevenueListener( null );
+                adView.destroy();
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Failed to destroy ad view: " + throwable );
+            }
+        }
+    }
+
+    private void rollbackCreatedAdView(
+            final String adUnitId,
+            final MaxAdView adView,
+            final Long expectedGeneration,
+            final Activity activity)
+    {
+        if ( mAdViews.get( adUnitId ) != adView
+                || expectedGeneration == null
+                || !expectedGeneration.equals( mAdViewGenerations.get( adUnitId ) ) )
+        {
+            return;
+        }
+
+        mAdViews.remove( adUnitId );
+        mAdViewAdFormats.remove( adUnitId );
+        mAdViewPositions.remove( adUnitId );
+        mAdViewGenerations.remove( adUnitId );
+        removeAndDestroyAdView( adView, activity );
+    }
+
+    private void setAdViewBackgroundColor(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final String hexColorCode)
+    {
+        runOnUiThread( "set ad view background color", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity ignored)
             {
-                d( "Setting " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\" to color: " + hexColorCode );
-
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
+                    logMissingAdView( adUnitId, effectiveAdFormat );
                     return;
                 }
 
-                adView.setBackgroundColor( Color.parseColor( hexColorCode ) );
+                try
+                {
+                    adView.setBackgroundColor( Color.parseColor( hexColorCode ) );
+                }
+                catch ( final IllegalArgumentException exception )
+                {
+                    e( "Invalid ad view color \"" + hexColorCode + "\": " + exception.getMessage() );
+                }
             }
         } );
     }
 
-    private void setAdViewExtraParameters(final String adUnitId, final MaxAdFormat adFormat, final String key, final String value)
+    private void setAdViewExtraParameter(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final String key,
+            final String value)
     {
-        getGameActivity().runOnUiThread( new Runnable()
+        runOnUiThread( "set ad view extra parameter", new ActivityAction()
         {
             @Override
-            public void run()
+            public void run(final Activity activity)
             {
-                d( "Setting " + adFormat.getLabel() + " extra with key: \"" + key + "\" value: " + value );
-
-                // Retrieve ad view from the map
-                final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                cacheAdViewExtraParameter( adUnitId, key, value );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
                 if ( adView == null )
                 {
-                    e( adFormat.getLabel() + " does not exist" );
                     return;
                 }
 
                 adView.setExtraParameter( key, value );
-
-                // Handle local changes as needed
-                if ( "force_banner".equalsIgnoreCase( key ) && MaxAdFormat.MREC != adFormat )
+                if ( "force_banner".equalsIgnoreCase( key )
+                        && MaxAdFormat.MREC != effectiveAdFormat )
                 {
-                    final MaxAdFormat forcedAdFormat;
-
-                    boolean shouldForceBanner = Boolean.parseBoolean( value );
-                    if ( shouldForceBanner )
-                    {
-                        forcedAdFormat = MaxAdFormat.BANNER;
-                    }
-                    else
-                    {
-                        forcedAdFormat = getDeviceSpecificBannerAdViewAdFormat();
-                    }
-
+                    final MaxAdFormat forcedAdFormat = Boolean.parseBoolean( value )
+                            ? MaxAdFormat.BANNER
+                            : getDeviceSpecificBannerAdViewAdFormat( activity );
                     mAdViewAdFormats.put( adUnitId, forcedAdFormat );
-                    positionAdView( adUnitId, forcedAdFormat );
+                    positionAdView( adUnitId, forcedAdFormat, activity );
                 }
             }
         } );
@@ -1080,203 +2142,584 @@ public class MaxDefoldPlugin
 
     private void startAutoRefresh(final String adUnitId, final MaxAdFormat adFormat)
     {
-        d( "Starting auto refresh " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
-
-        final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
-        if ( adView == null )
+        runOnUiThread( "start ad view auto-refresh", new ActivityAction()
         {
-            e( adFormat.getLabel() + " does not exist" );
-            return;
-        }
-
-        adView.startAutoRefresh();
+            @Override
+            public void run(final Activity ignored)
+            {
+                mAdUnitIdsWithStoppedAutoRefresh.remove( adUnitId );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
+                if ( adView == null )
+                {
+                    logMissingAdView( adUnitId, effectiveAdFormat );
+                    return;
+                }
+                if ( isAdViewVisible( adView ) )
+                {
+                    adView.startAutoRefresh();
+                }
+            }
+        } );
     }
 
     private void stopAutoRefresh(final String adUnitId, final MaxAdFormat adFormat)
     {
-        d( "Stopping auto refresh " + adFormat.getLabel() + " with ad unit id \"" + adUnitId + "\"" );
-
-        final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
-        if ( adView == null )
+        runOnUiThread( "stop ad view auto-refresh", new ActivityAction()
         {
-            e( adFormat.getLabel() + " does not exist" );
-            return;
-        }
-
-        adView.stopAutoRefresh();
+            @Override
+            public void run(final Activity ignored)
+            {
+                mAdUnitIdsWithStoppedAutoRefresh.add( adUnitId );
+                final MaxAdFormat effectiveAdFormat =
+                        getEffectiveAdViewAdFormat( adUnitId, adFormat );
+                final MaxAdView adView = retrieveAdView(
+                        adUnitId,
+                        effectiveAdFormat,
+                        null,
+                        false );
+                if ( adView == null )
+                {
+                    logMissingAdView( adUnitId, effectiveAdFormat );
+                    return;
+                }
+                adView.stopAutoRefresh();
+            }
+        } );
     }
 
-    private void logInvalidAdFormat(MaxAdFormat adFormat)
-    {
-        logStackTrace( new IllegalStateException( "invalid ad format: " + adFormat ) );
-    }
-
-    private void logStackTrace(Exception e)
-    {
-        e( Log.getStackTraceString( e ) );
-    }
-
-    public static void d(final String message)
-    {
-        final String fullMessage = "[" + TAG + "] " + message;
-        Log.d( SDK_TAG, fullMessage );
-    }
-
-    public static void e(final String message)
-    {
-        final String fullMessage = "[" + TAG + "] " + message;
-        Log.e( SDK_TAG, fullMessage );
-    }
-
-    private MaxInterstitialAd retrieveInterstitial(String adUnitId)
+    private MaxInterstitialAd retrieveInterstitial(
+            final String adUnitId,
+            final Activity activity)
     {
         MaxInterstitialAd result = mInterstitials.get( adUnitId );
         if ( result == null )
         {
-            result = new MaxInterstitialAd( adUnitId, sdk, getGameActivity() );
+            result = new MaxInterstitialAd( adUnitId );
             result.setListener( this );
             result.setRevenueListener( this );
-
             mInterstitials.put( adUnitId, result );
         }
-
         return result;
     }
 
-    private MaxRewardedAd retrieveRewardedAd(String adUnitId)
+    private MaxRewardedAd retrieveRewardedAd(
+            final String adUnitId,
+            final Activity activity)
     {
         MaxRewardedAd result = mRewardedAds.get( adUnitId );
         if ( result == null )
         {
-            result = MaxRewardedAd.getInstance( adUnitId, sdk, getGameActivity() );
+            result = MaxRewardedAd.getInstance( adUnitId );
             result.setListener( this );
             result.setRevenueListener( this );
-
             mRewardedAds.put( adUnitId, result );
         }
-
         return result;
     }
 
-    private MaxAdView retrieveAdView(String adUnitId, MaxAdFormat adFormat)
-    {
-        return retrieveAdView( adUnitId, adFormat, null );
-    }
-
-    public MaxAdView retrieveAdView(String adUnitId, MaxAdFormat adFormat, String adViewPosition)
+    private MaxAdView retrieveAdView(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final String adViewPosition,
+            final boolean createIfMissing)
     {
         MaxAdView result = mAdViews.get( adUnitId );
-        if ( result == null && adViewPosition != null )
+        if ( result == null && createIfMissing )
         {
-            // Must explicitly cast the GameActivity to Context to avoid a crash from NoSuchMethodError
-            result = new MaxAdView( adUnitId, adFormat, sdk, (Context) getGameActivity() );
-            result.setListener( this );
-            result.setRevenueListener( this );
-
+            result = new MaxAdView( adUnitId, adFormat );
+            final long generation = ++nextAdViewGeneration;
+            final AdViewListener listener = new AdViewListener( adUnitId, generation );
+            result.setListener( listener );
+            result.setRevenueListener( listener );
+            result.setExtraParameter( "allow_pause_auto_refresh_immediately", "true" );
+            final Map<String, String> extraParameters = mAdViewExtraParameters.get( adUnitId );
+            if ( extraParameters != null )
+            {
+                for ( final Map.Entry<String, String> entry : extraParameters.entrySet() )
+                {
+                    result.setExtraParameter( entry.getKey(), entry.getValue() );
+                }
+            }
+            result.setBackgroundColor( Color.TRANSPARENT );
+            final String placement = mAdViewPlacements.get( adUnitId );
+            if ( placement != null )
+            {
+                result.setPlacement( placement );
+            }
             mAdViews.put( adUnitId, result );
+            mAdViewAdFormats.put( adUnitId, adFormat );
             mAdViewPositions.put( adUnitId, adViewPosition );
+            mAdViewGenerations.put( adUnitId, generation );
         }
-
         return result;
     }
 
-    private void positionAdView(MaxAd ad)
+    private MaxAdFormat getEffectiveAdViewAdFormat(
+            final String adUnitId,
+            final MaxAdFormat requestedAdFormat)
     {
-        positionAdView( ad.getAdUnitId(), ad.getFormat() );
+        final MaxAdFormat effectiveAdFormat = mAdViewAdFormats.get( adUnitId );
+        return effectiveAdFormat != null ? effectiveAdFormat : requestedAdFormat;
     }
 
-    private void positionAdView(String adUnitId, MaxAdFormat adFormat)
+    private MaxAdFormat getAdViewAdFormatForCreation(
+            final String adUnitId,
+            final MaxAdFormat requestedAdFormat,
+            final Activity activity)
     {
-        final MaxAdView adView = retrieveAdView( adUnitId, adFormat );
+        if ( MaxAdFormat.MREC == requestedAdFormat )
+        {
+            return requestedAdFormat;
+        }
+
+        final String forceBanner = getCachedAdViewExtraParameter( adUnitId, "force_banner" );
+        if ( forceBanner == null )
+        {
+            return requestedAdFormat;
+        }
+        return Boolean.parseBoolean( forceBanner )
+                ? MaxAdFormat.BANNER
+                : getDeviceSpecificBannerAdViewAdFormat( activity );
+    }
+
+    private void cacheAdViewExtraParameter(
+            final String adUnitId,
+            final String key,
+            final String value)
+    {
+        Map<String, String> extraParameters = mAdViewExtraParameters.get( adUnitId );
+        if ( extraParameters == null )
+        {
+            extraParameters = new HashMap<>( 2 );
+            mAdViewExtraParameters.put( adUnitId, extraParameters );
+        }
+
+        if ( "force_banner".equalsIgnoreCase( key ) )
+        {
+            String previousKey = null;
+            for ( final String existingKey : extraParameters.keySet() )
+            {
+                if ( "force_banner".equalsIgnoreCase( existingKey ) )
+                {
+                    previousKey = existingKey;
+                    break;
+                }
+            }
+            if ( previousKey != null )
+            {
+                extraParameters.remove( previousKey );
+            }
+        }
+        extraParameters.put( key, value );
+    }
+
+    private String getCachedAdViewExtraParameter(
+            final String adUnitId,
+            final String requestedKey)
+    {
+        final Map<String, String> extraParameters = mAdViewExtraParameters.get( adUnitId );
+        if ( extraParameters == null )
+        {
+            return null;
+        }
+        for ( final Map.Entry<String, String> entry : extraParameters.entrySet() )
+        {
+            if ( requestedKey.equalsIgnoreCase( entry.getKey() ) )
+            {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private void positionAdView(
+            final String adUnitId,
+            final MaxAdFormat adFormat,
+            final Activity activity)
+    {
+        final MaxAdFormat effectiveAdFormat =
+                getEffectiveAdViewAdFormat( adUnitId, adFormat );
+        if ( activity == null )
+        {
+            e( "Unable to position " + effectiveAdFormat.getLabel()
+                    + ": Activity is no longer available" );
+            return;
+        }
+
+        final MaxAdView adView = retrieveAdView(
+                adUnitId,
+                effectiveAdFormat,
+                null,
+                false );
         if ( adView == null )
         {
-            e( adFormat.getLabel() + " does not exist" );
+            logMissingAdView( adUnitId, effectiveAdFormat );
             return;
         }
 
-        final RelativeLayout relativeLayout = (RelativeLayout) adView.getParent();
-        if ( relativeLayout == null )
+        final ViewParent parent = adView.getParent();
+        if ( !( parent instanceof RelativeLayout ) )
         {
-            e( adFormat.getLabel() + "'s parent does not exist" );
+            e( "Unable to position " + effectiveAdFormat.getLabel() + ": container is missing" );
             return;
         }
 
-        // Size the ad
+        final RelativeLayout container = (RelativeLayout) parent;
         final String adViewPosition = mAdViewPositions.get( adUnitId );
-        final AdViewSize adViewSize = getAdViewSize( adFormat );
-        final int width = AppLovinSdkUtils.dpToPx( getGameActivity(), adViewSize.widthDp );
-        final int height = AppLovinSdkUtils.dpToPx( getGameActivity(), adViewSize.heightDp );
+        if ( TextUtils.isEmpty( adViewPosition ) )
+        {
+            e( "Unable to position " + effectiveAdFormat.getLabel() + ": position is missing" );
+            return;
+        }
 
-        final RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) adView.getLayoutParams();
+        final AdViewSize adViewSize = getAdViewSize( effectiveAdFormat );
+        final int width = AppLovinSdkUtils.dpToPx( activity, adViewSize.widthDp );
+        final int height = AppLovinSdkUtils.dpToPx( activity, adViewSize.heightDp );
+        final RelativeLayout.LayoutParams params =
+                (RelativeLayout.LayoutParams) adView.getLayoutParams();
 
         params.height = height;
-        adView.setLayoutParams( params );
-
-        // Parse gravity
-        int gravity = 0;
-
-        // Reset rotation, translation and margins so that the banner can be positioned again
+        params.width = MaxAdFormat.MREC == effectiveAdFormat
+                ? width
+                : RelativeLayout.LayoutParams.MATCH_PARENT;
+        params.setMargins( 0, 0, 0, 0 );
         adView.setRotation( 0 );
         adView.setTranslationX( 0 );
-        params.setMargins( 0, 0, 0, 0 );
+        adView.setTranslationY( 0 );
+        adView.setLayoutParams( params );
 
+        int gravity;
         if ( "centered".equalsIgnoreCase( adViewPosition ) )
         {
-            gravity = Gravity.CENTER_VERTICAL | Gravity.CENTER_HORIZONTAL;
+            gravity = Gravity.CENTER;
         }
         else
         {
-            // Figure out vertical params
-            if ( adViewPosition == null )
-            {
-                e( "Error positioning ad view due to null position" );
-                return;
-            }
-            else if ( adViewPosition.contains( "top" ) )
-            {
-                gravity = Gravity.TOP;
-            }
-            else if ( adViewPosition.contains( "bottom" ) )
-            {
-                gravity = Gravity.BOTTOM;
-            }
+            gravity = adViewPosition.toLowerCase().contains( "bottom" )
+                    ? Gravity.BOTTOM
+                    : Gravity.TOP;
 
-            // Figure out horizontal params
-            if ( adViewPosition.contains( "center" ) )
+            if ( adViewPosition.toLowerCase().contains( "left" ) )
             {
-                gravity |= Gravity.CENTER_HORIZONTAL;
-                params.width = ( MaxAdFormat.MREC == adFormat ) ? width : RelativeLayout.LayoutParams.MATCH_PARENT; // Stretch width if banner
+                gravity |= Gravity.LEFT;
+                params.width = width;
+            }
+            else if ( adViewPosition.toLowerCase().contains( "right" ) )
+            {
+                gravity |= Gravity.RIGHT;
+                params.width = width;
             }
             else
             {
-                params.width = width;
-
-                if ( adViewPosition.contains( "left" ) )
-                {
-                    gravity |= Gravity.LEFT;
-                }
-                else if ( adViewPosition.contains( "right" ) )
-                {
-                    gravity |= Gravity.RIGHT;
-                }
+                gravity |= Gravity.CENTER_HORIZONTAL;
             }
+            adView.setLayoutParams( params );
         }
 
-        WindowManager.LayoutParams layoutParams = (WindowManager.LayoutParams) relativeLayout.getLayoutParams();
-        layoutParams.gravity = gravity;
-        getGameActivity().getWindowManager().updateViewLayout( relativeLayout, layoutParams );
+        final ViewGroup.LayoutParams rawLayoutParams = container.getLayoutParams();
+        if ( !( rawLayoutParams instanceof WindowManager.LayoutParams ) )
+        {
+            e( "Unable to position " + effectiveAdFormat.getLabel()
+                    + ": invalid window layout parameters" );
+            return;
+        }
+
+        final WindowManager.LayoutParams windowLayoutParams =
+                (WindowManager.LayoutParams) rawLayoutParams;
+        windowLayoutParams.gravity = gravity;
+        activity.getWindowManager().updateViewLayout( container, windowLayoutParams );
     }
     // endregion
 
     // region Utility Methods
+    private void runOnUiThread(final String operation, final ActivityAction action)
+    {
+        final long expectedLifecycleGeneration;
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested || state == State.DESTROYED )
+            {
+                return;
+            }
+            expectedLifecycleGeneration = lifecycleGeneration;
+        }
+
+        runOnUiThread( operation, expectedLifecycleGeneration, action );
+    }
+
+    private void runOnUiThread(
+            final String operation,
+            final long expectedLifecycleGeneration,
+            final ActivityAction action)
+    {
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested
+                    || state == State.DESTROYED
+                    || lifecycleGeneration != expectedLifecycleGeneration )
+            {
+                return;
+            }
+        }
+
+        final Runnable task = createGuardedUiTask(
+                operation,
+                expectedLifecycleGeneration,
+                action );
+        if ( Looper.myLooper() == Looper.getMainLooper() )
+        {
+            task.run();
+        }
+        else
+        {
+            mainHandler.post( task );
+        }
+    }
+
+    private void postOnUiThread(final String operation, final ActivityAction action)
+    {
+        final long expectedLifecycleGeneration;
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested || state == State.DESTROYED )
+            {
+                return;
+            }
+            expectedLifecycleGeneration = lifecycleGeneration;
+        }
+
+        mainHandler.post( createGuardedUiTask(
+                operation,
+                expectedLifecycleGeneration,
+                action ) );
+    }
+
+    private Runnable createGuardedUiTask(
+            final String operation,
+            final long expectedLifecycleGeneration,
+            final ActivityAction action)
+    {
+        return new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                final Activity activity = gameActivity.get();
+                synchronized ( lifecycleLock )
+                {
+                    if ( destroyRequested
+                            || state == State.DESTROYED
+                            || lifecycleGeneration != expectedLifecycleGeneration )
+                    {
+                        return;
+                    }
+                }
+
+                if ( !isActivityUsable( activity ) )
+                {
+                    e( "Unable to " + operation + ": Activity is no longer available" );
+                    return;
+                }
+
+                try
+                {
+                    action.run( activity );
+                }
+                catch ( final Throwable throwable )
+                {
+                    e( "Unable to " + operation + ": " + Log.getStackTraceString( throwable ) );
+                }
+            }
+        };
+    }
+
+    private <T> T callOnUiThread(
+            final String operation,
+            final T fallback,
+            final ActivityCallable<T> callable)
+    {
+        final long expectedLifecycleGeneration;
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested || state == State.DESTROYED )
+            {
+                return fallback;
+            }
+            expectedLifecycleGeneration = lifecycleGeneration;
+        }
+
+        if ( Looper.myLooper() == Looper.getMainLooper() )
+        {
+            synchronized ( lifecycleLock )
+            {
+                if ( destroyRequested
+                        || state == State.DESTROYED
+                        || lifecycleGeneration != expectedLifecycleGeneration )
+                {
+                    return fallback;
+                }
+            }
+
+            final Activity activity = gameActivity.get();
+            if ( !isActivityUsable( activity ) )
+            {
+                e( "Unable to " + operation + ": Activity is no longer available" );
+                return fallback;
+            }
+
+            try
+            {
+                return callable.call( activity );
+            }
+            catch ( final Throwable throwable )
+            {
+                e( "Unable to " + operation + ": " + Log.getStackTraceString( throwable ) );
+                return fallback;
+            }
+        }
+
+        final Callable<T> guardedCallable = new Callable<T>()
+        {
+            @Override
+            public T call() throws Exception
+            {
+                synchronized ( lifecycleLock )
+                {
+                    if ( destroyRequested
+                            || state == State.DESTROYED
+                            || lifecycleGeneration != expectedLifecycleGeneration )
+                    {
+                        return fallback;
+                    }
+                }
+
+                final Activity activity = gameActivity.get();
+                if ( !isActivityUsable( activity ) )
+                {
+                    e( "Unable to " + operation + ": Activity is no longer available" );
+                    return fallback;
+                }
+                return callable.call( activity );
+            }
+        };
+        final FutureTask<T> task = new FutureTask<>( guardedCallable );
+        mainHandler.post( task );
+
+        try
+        {
+            return task.get( UI_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS );
+        }
+        catch ( final Throwable throwable )
+        {
+            task.cancel( false );
+            e( "Unable to " + operation + " on the UI thread: " + throwable );
+            return fallback;
+        }
+    }
+
+    private boolean repostCallbackToUi(final String operation, final Runnable callback)
+    {
+        if ( Looper.myLooper() == Looper.getMainLooper() && callbackDispatchInProgress )
+        {
+            return false;
+        }
+
+        runOnUiThread( operation, new ActivityAction()
+        {
+            @Override
+            public void run(final Activity ignored)
+            {
+                callbackDispatchInProgress = true;
+                try
+                {
+                    callback.run();
+                }
+                finally
+                {
+                    callbackDispatchInProgress = false;
+                }
+            }
+        } );
+        return true;
+    }
+
+    private void dispatchAdViewCallback(
+            final String operation,
+            final String adUnitId,
+            final long generation,
+            final Runnable callback)
+    {
+        if ( repostCallbackToUi( operation, new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                dispatchAdViewCallback( operation, adUnitId, generation, callback );
+            }
+        } ) )
+        {
+            return;
+        }
+
+        if ( !canHandleCallback()
+                || !Long.valueOf( generation ).equals( mAdViewGenerations.get( adUnitId ) ) )
+        {
+            return;
+        }
+        callback.run();
+    }
+
+    private boolean canHandleCallback()
+    {
+        synchronized ( lifecycleLock )
+        {
+            if ( destroyRequested || state == State.DESTROYED )
+            {
+                return false;
+            }
+            if ( !isActivityUsable( gameActivity.get() ) )
+            {
+                e( "Dropping MAX callback because Activity is no longer available" );
+                return false;
+            }
+            return true;
+        }
+    }
+
+    private boolean requireReady(final String operation)
+    {
+        if ( destroyRequested || state != State.READY || sdk == null )
+        {
+            e( "Unable to " + operation + ": initialize AppLovin MAX first" );
+            return false;
+        }
+        return true;
+    }
+
     private MaxAdFormat getDeviceSpecificBannerAdViewAdFormat()
     {
-        return getDeviceSpecificBannerAdViewAdFormat( getGameActivity() );
+        final Activity activity = gameActivity.get();
+        return isActivityUsable( activity )
+                ? getDeviceSpecificBannerAdViewAdFormat( activity )
+                : MaxAdFormat.BANNER;
     }
 
     public static MaxAdFormat getDeviceSpecificBannerAdViewAdFormat(final Context context)
     {
-        return AppLovinSdkUtils.isTablet( context ) ? MaxAdFormat.LEADER : MaxAdFormat.BANNER;
+        return context != null && AppLovinSdkUtils.isTablet( context )
+                ? MaxAdFormat.LEADER
+                : MaxAdFormat.BANNER;
+    }
+
+    private static boolean isActivityUsable(final Activity activity)
+    {
+        return activity != null && !activity.isFinishing() && !activity.isDestroyed();
     }
 
     protected static class AdViewSize
@@ -1297,81 +2740,209 @@ public class MaxDefoldPlugin
         {
             return new AdViewSize( 728, 90 );
         }
-        else if ( MaxAdFormat.BANNER == format )
+        if ( MaxAdFormat.BANNER == format )
         {
             return new AdViewSize( 320, 50 );
         }
-        else if ( MaxAdFormat.MREC == format )
+        if ( MaxAdFormat.MREC == format )
         {
             return new AdViewSize( 300, 250 );
         }
-        else
-        {
-            throw new IllegalArgumentException( "Invalid ad format" );
-        }
+        throw new IllegalArgumentException( "Invalid ad format: " + format );
     }
 
     private JSONObject getAdInfo(final MaxAd ad)
     {
-        JSONObject adInfo = new JSONObject();
-
-        JsonUtils.putString( adInfo, "adUnitIdentifier", ad.getAdUnitId() );
-        JsonUtils.putString( adInfo, "creativeIdentifier", StringUtils.emptyIfNull( ad.getCreativeId() ) );
-        JsonUtils.putString( adInfo, "networkName", ad.getNetworkName() );
-        JsonUtils.putString( adInfo, "placement", StringUtils.emptyIfNull( ad.getPlacement() ) );
-        JsonUtils.putDouble( adInfo, "revenue", ad.getRevenue() );
-
+        final JSONObject adInfo = new JSONObject();
+        put( adInfo, "adUnitIdentifier", emptyIfNull( ad.getAdUnitId() ) );
+        put( adInfo, "creativeIdentifier", emptyIfNull( ad.getCreativeId() ) );
+        put( adInfo, "networkName", emptyIfNull( ad.getNetworkName() ) );
+        put( adInfo, "placement", emptyIfNull( ad.getPlacement() ) );
+        put( adInfo, "revenue", ad.getRevenue() );
+        put( adInfo, "format", ad.getFormat() != null ? ad.getFormat().getLabel() : "" );
+        put( adInfo, "networkPlacement", emptyIfNull( ad.getNetworkPlacement() ) );
+        put( adInfo, "revenuePrecision", emptyIfNull( ad.getRevenuePrecision() ) );
+        put( adInfo, "requestLatencyMillis", ad.getRequestLatencyMillis() );
+        put( adInfo, "dspName", emptyIfNull( ad.getDspName() ) );
+        put( adInfo, "dspIdentifier", emptyIfNull( ad.getDspId() ) );
         return adInfo;
     }
 
-    private JSONObject getErrorInfo(final MaxError error)
+    private JSONObject getLoadErrorInfo(final MaxError error)
     {
-        JSONObject errorInfo = new JSONObject();
-
-        JsonUtils.putInt( errorInfo, "code", error.getCode() );
-        JsonUtils.putString( errorInfo, "message", error.getMessage() );
-
+        final JSONObject errorInfo = new JSONObject();
+        if ( error != null )
+        {
+            put( errorInfo, "code", error.getCode() );
+            put( errorInfo, "message", emptyIfNull( error.getMessage() ) );
+            put( errorInfo, "requestLatencyMillis", error.getRequestLatencyMillis() );
+        }
         return errorInfo;
     }
 
-    private static Map<String, String> deserialize(final String serialized)
+    private JSONObject getDisplayErrorInfo(final MaxError error)
     {
-        if ( !TextUtils.isEmpty( serialized ) )
+        final JSONObject errorInfo = new JSONObject();
+        if ( error != null )
         {
-            try
-            {
-                return JsonUtils.toStringMap( JsonUtils.jsonObjectFromJsonString( serialized, new JSONObject() ) );
-            }
-            catch ( Throwable th )
-            {
-                e( "Failed to deserialize: (" + serialized + ") with exception: " + th );
-            }
+            put( errorInfo, "code", error.getCode() );
+            put( errorInfo, "message", emptyIfNull( error.getMessage() ) );
+            put( errorInfo, "mediatedNetworkErrorCode", error.getMediatedNetworkErrorCode() );
+            put(
+                    errorInfo,
+                    "mediatedNetworkErrorMessage",
+                    emptyIfNull( error.getMediatedNetworkErrorMessage() ) );
         }
-
-        return Collections.emptyMap();
+        return errorInfo;
     }
 
-    private static ConsentFlowUserGeography getAppLovinConsentFlowUserGeography(final String userGeography)
+    private static Map<String, Object> deserialize(final String serialized)
+    {
+        if ( TextUtils.isEmpty( serialized ) )
+        {
+            return Collections.emptyMap();
+        }
+
+        try
+        {
+            return jsonObjectToMap( new JSONObject( serialized ) );
+        }
+        catch ( final JSONException exception )
+        {
+            e( "Failed to deserialize event parameters: " + exception.getMessage() );
+            return Collections.emptyMap();
+        }
+    }
+
+    private static Map<String, Object> jsonObjectToMap(final JSONObject json)
+            throws JSONException
+    {
+        final Map<String, Object> result = new HashMap<>();
+        final Iterator<String> keys = json.keys();
+        while ( keys.hasNext() )
+        {
+            final String key = keys.next();
+            result.put( key, jsonValueToJava( json.get( key ) ) );
+        }
+        return result;
+    }
+
+    private static List<Object> jsonArrayToList(final JSONArray json)
+            throws JSONException
+    {
+        final List<Object> result = new ArrayList<>( json.length() );
+        for ( int index = 0; index < json.length(); ++index )
+        {
+            result.add( jsonValueToJava( json.get( index ) ) );
+        }
+        return result;
+    }
+
+    private static Object jsonValueToJava(final Object value)
+            throws JSONException
+    {
+        if ( value == JSONObject.NULL )
+        {
+            return null;
+        }
+        if ( value instanceof JSONObject )
+        {
+            return jsonObjectToMap( (JSONObject)value );
+        }
+        if ( value instanceof JSONArray )
+        {
+            return jsonArrayToList( (JSONArray)value );
+        }
+        return value;
+    }
+
+    private static ConsentFlowUserGeography getAppLovinConsentFlowUserGeography(
+            final String userGeography)
     {
         if ( "GDPR".equalsIgnoreCase( userGeography ) )
         {
             return ConsentFlowUserGeography.GDPR;
         }
-        else if ( "OTHER".equalsIgnoreCase( userGeography ) )
+        if ( "OTHER".equalsIgnoreCase( userGeography ) )
         {
             return ConsentFlowUserGeography.OTHER;
         }
-
         return ConsentFlowUserGeography.UNKNOWN;
+    }
+
+    private static boolean isAdViewVisible(final MaxAdView adView)
+    {
+        if ( adView.getVisibility() != View.VISIBLE )
+        {
+            return false;
+        }
+        final ViewParent parent = adView.getParent();
+        return !( parent instanceof View ) || ( (View) parent ).getVisibility() == View.VISIBLE;
+    }
+
+    private static void put(final JSONObject object, final String key, final Object value)
+    {
+        try
+        {
+            object.put( key, value );
+        }
+        catch ( final JSONException exception )
+        {
+            e( "Unable to add JSON field \"" + key + "\": " + exception.getMessage() );
+        }
+    }
+
+    private static void merge(final JSONObject destination, final JSONObject source)
+    {
+        final Iterator<String> keys = source.keys();
+        while ( keys.hasNext() )
+        {
+            final String key = keys.next();
+            put( destination, key, source.opt( key ) );
+        }
+    }
+
+    private static String emptyIfNull(final String value)
+    {
+        return value != null ? value : "";
+    }
+
+    private static void logMissingAdView(final String adUnitId, final MaxAdFormat adFormat)
+    {
+        e( adFormat.getLabel() + " does not exist for ad unit ID \"" + adUnitId + "\"" );
+    }
+
+    private void logInvalidAdFormat(final MaxAdFormat adFormat)
+    {
+        logStackTrace( new IllegalStateException( "Invalid ad format: " + adFormat ) );
+    }
+
+    private void logStackTrace(final Exception exception)
+    {
+        e( Log.getStackTraceString( exception ) );
+    }
+
+    public static void d(final String message)
+    {
+        Log.d( SDK_TAG, "[" + TAG + "] " + message );
+    }
+
+    public static void e(final String message)
+    {
+        Log.e( SDK_TAG, "[" + TAG + "] " + message );
     }
     // endregion
 
     // region Defold Bridge
-
-    // NOTE: Defold deserializes to the relevant USTRUCT based on the JSON keys, so the keys must match with the corresponding UPROPERTY
     private void sendDefoldEvent(final String name, final JSONObject params)
     {
-        appLovinAddToQueue( name, params.toString() );
+        synchronized ( lifecycleLock )
+        {
+            if ( !destroyRequested && state != State.DESTROYED )
+            {
+                appLovinAddToQueue( name, params.toString() );
+            }
+        }
     }
     // endregion
 }

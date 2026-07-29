@@ -1,103 +1,199 @@
-if not applovin then
-    error("Extension works only on iOS and Android")
-    return
-end
-
 local log = require("example.log")
 local ui = require("example.ui")
 local ads = require("example.ads")
 local callback = require("example.callback")
 local dirtylarry = require("dirtylarry.dirtylarry")
 
-local SDK_KEY = "YOUR_SDK_KEY_HERE"
+-- The repository demo key is configured in game.project. Override this setting
+-- when testing an application owned by another MAX account.
+local SDK_KEY = sys.get_config_string("applovin.demo_sdk_key", "")
+local IS_DEBUG_BUILD = sys.get_engine_info().is_debug
+
+-- Add only advertising IDs for QA devices, before SDK initialization.
+local TEST_DEVICE_ADVERTISING_IDS = {}
+
+-- Set these to booleans only after your app has collected the applicable
+-- privacy choices. nil means that the example does not invent a user choice.
+local HAS_USER_CONSENT = nil
+local DO_NOT_SELL = nil
+
+-- The MAX Terms and Privacy Policy Flow is opt-in. Before changing this to
+-- true, complete the Google UMP/dashboard/app-ID prerequisites documented in
+-- docs/index.md and replace the URLs with your public policies.
+local ENABLE_TERMS_AND_PRIVACY_POLICY_FLOW = false
+local PRIVACY_POLICY_URL = "https://YOUR_DOMAIN.example/privacy"
+local TERMS_OF_SERVICE_URL = "https://YOUR_DOMAIN.example/terms"
 
 local data = {
-    ["main_page"] = { type = "page",
-        ["mediation_debugger"] = {},
-        ["interstitial"] = {},
-        ["rewarded"] = {},
-        ["banner"] = {},
-        ["mrec"] = {},
-    },
-    ["ads_page"] = { type = "page",
-        ["back"] = {},
-        ["load"] = {},
-    }
+	["main_page"] = {
+		type = "page",
+		["mediation_debugger"] = {},
+		["interstitial"] = {},
+		["rewarded"] = {},
+		["banner"] = {},
+		["mrec"] = {},
+	},
+	["ads_page"] = {
+		type = "page",
+		["back"] = {},
+		["load"] = {},
+	},
 }
 
 local actions = {}
+local setup_ads_page
 
-actions.back = function(self, el)
-    ads.on_back_button_clicked()
-    
-    ui.disable_all(self.ui, "page")
-    ui.enable(self.ui.main_page, true)
-    ui.enable(self.ui.back, false)
+local function is_placeholder(value)
+	return not value
+		or value == ""
+		or value:find("^YOUR_")
+		or value:find("YOUR_DOMAIN", 1, true)
 end
 
-actions.mediation_debugger = function(self, el)
-    applovin.show_mediation_debugger()
+local function max_is_ready()
+	if not applovin then
+		print("MAX is available only in Android and iOS bundles.")
+		return false
+	elseif not IS_DEBUG_BUILD then
+		gui.set_text(gui.get_node("init_status"), "MAX demo is disabled in release builds")
+		print("The repository demo key is not passed to MAX in release builds.")
+		return false
+	elseif not applovin.is_initialized() then
+		gui.set_text(gui.get_node("init_status"), "Initialize MAX before opening the debugger")
+		print("MAX has not initialized. Set AppLovin > Demo SDK Key and rebuild, then wait for its callback.")
+		return false
+	end
+	return true
 end
 
-actions.interstitial = function(self, el)
-    setup_ads_page(self, "Interstitial")
+local function configure_max()
+	applovin.set_verbose_logging_enabled(true)
+	applovin.set_creative_debugger_enabled(true)
+	applovin.set_muted(false)
+
+	if #TEST_DEVICE_ADVERTISING_IDS > 0 then
+		applovin.set_test_device_advertising_ids(TEST_DEVICE_ADVERTISING_IDS)
+	end
+
+	if HAS_USER_CONSENT ~= nil then
+		applovin.set_has_user_consent(HAS_USER_CONSENT)
+	else
+		print("Demo privacy note: HAS_USER_CONSENT is unset; apply a real user choice before production.")
+	end
+
+	if DO_NOT_SELL ~= nil then
+		applovin.set_do_not_sell(DO_NOT_SELL)
+	else
+		print("Demo privacy note: DO_NOT_SELL is unset; apply a real user choice before production.")
+	end
+
+	if ENABLE_TERMS_AND_PRIVACY_POLICY_FLOW then
+		if is_placeholder(PRIVACY_POLICY_URL) then
+			print("Consent flow not enabled: replace PRIVACY_POLICY_URL first.")
+			return false
+		end
+		applovin.set_terms_and_privacy_policy_flow_enabled(true)
+		applovin.set_privacy_policy_url(PRIVACY_POLICY_URL)
+		if not is_placeholder(TERMS_OF_SERVICE_URL) then
+			applovin.set_terms_of_service_url(TERMS_OF_SERVICE_URL)
+		end
+
+		-- For testing the first-run flow outside a GDPR region only:
+		-- applovin.set_consent_flow_debug_user_geography("GDPR")
+	end
+
+	return true
 end
 
-actions.rewarded = function(self, el)
-    setup_ads_page(self, "Rewarded")
+actions.back = function(self)
+	ads.on_back_button_clicked()
+
+	ui.disable_all(self.ui, "page")
+	ui.enable(self.ui.main_page, true)
+	ui.enable(self.ui.back, false)
 end
 
-actions.banner = function(self, el)
-    setup_ads_page(self, "Banner")
+actions.mediation_debugger = function()
+	if max_is_ready() then
+		applovin.show_mediation_debugger()
+	end
 end
 
-actions.mrec = function(self, el)
-    setup_ads_page(self, "MRec")
+actions.interstitial = function(self)
+	setup_ads_page(self, "Interstitial")
 end
 
-actions.load = function(self, el)
-    ads.on_load_button_clicked()
+actions.rewarded = function(self)
+	setup_ads_page(self, "Rewarded")
 end
 
-function setup_ads_page(self, ad_type)
-    ui.disable_all(self.ui, "page")
-    ui.enable(self.ui.ads_page, true)
-    ui.enable(self.ui.back, true)
-
-    ads.setup(ad_type)
+actions.banner = function(self)
+	setup_ads_page(self, "Banner")
 end
 
-function init(self)    
-    self.console = gui.get_node("console")
-    self.ui = ui.fill_tree(data, actions)
-    
-    ui.enable(self.ui.main_page, true)
-    ui.enable(self.ui.back, false) 
+actions.mrec = function(self)
+	setup_ads_page(self, "MRec")
+end
 
-    msg.post(".", "acquire_input_focus")
+actions.load = function()
+	ads.on_load_button_clicked()
+end
 
-    callback.set()
+setup_ads_page = function(self, ad_type)
+	ui.disable_all(self.ui, "page")
+	ui.enable(self.ui.ads_page, true)
+	ui.enable(self.ui.back, true)
+	ads.setup(ad_type)
+end
 
-    gui.set_text(gui.get_node("init_status"), "Initializing SDK...")
+function init(self)
+	self.console = gui.get_node("console")
+	self.ui = ui.fill_tree(data, actions)
 
-    -- MAX Consent Flow - https://developers.applovin.com/en/defold/overview/terms-and-privacy-policy-flow
-    applovin.set_terms_and_privacy_policy_flow_enabled(true)
-    applovin.set_privacy_policy_url("https://your_company_name.com/privacy/") -- mandatory
-    applovin.set_terms_of_service_url("https://your_company_name.com/terms/") -- optional
+	ui.enable(self.ui.main_page, true)
+	ui.enable(self.ui.back, false)
+	msg.post(".", "acquire_input_focus")
 
-    applovin.initialize(SDK_KEY)
+	local init_status = gui.get_node("init_status")
+	if not applovin then
+		gui.set_text(init_status, "MAX is available in Android/iOS bundles")
+		print("Desktop guard active: the native MAX extension was not initialized.")
+		return
+	elseif not IS_DEBUG_BUILD then
+		gui.set_text(init_status, "MAX demo is disabled in release builds")
+		print("The repository demo key is not passed to MAX in release builds.")
+		return
+	elseif is_placeholder(SDK_KEY) then
+		gui.set_text(init_status, "SDK key missing; configure and rebuild")
+		print("Set AppLovin > Demo SDK Key in game.project, or pass applovin.demo_sdk_key in Bob --settings.")
+		return
+	end
+
+	callback.set()
+	gui.set_text(init_status, "Initializing SDK...")
+
+	if configure_max() then
+		applovin.initialize(SDK_KEY)
+	else
+		gui.set_text(init_status, "MAX setup is incomplete; see console")
+	end
+end
+
+function final(self)
+	ads.final()
+	callback.clear()
 end
 
 function update(self, dt)
-    log.update(self.console)
+	log.update(self.console)
 end
 
 function on_input(self, action_id, action)
-    for name, el in pairs(self.ui) do
-        if ui.is_button(el) and ui.is_enabled(el) then
-            dirtylarry:button(el.name, action_id, action, function()
-                actions[el.name](self, el)
-            end)
-        end
-    end
+	for _, element in pairs(self.ui) do
+		if ui.is_button(element) and ui.is_enabled(element) then
+			dirtylarry:button(element.name, action_id, action, function()
+				actions[element.name](self)
+			end)
+		end
+	end
 end

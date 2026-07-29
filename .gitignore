@@ -43,3 +43,9 @@ luac.out
 /build
 .DS_Store
 .idea
+/bob.jar
+/debug.keystore
+/debug.keystore.pass.txt
+__pycache__/
+*.py[cod]
+/.editor_settings

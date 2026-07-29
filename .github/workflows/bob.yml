@@ -1,0 +1,136 @@
+name: Build AppLovin MAX example with Bob
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: applovin-bob-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check generated packaging
+        run: |
+          python3 -B updater/adapters.py check
+          python3 -B updater/android.py check
+          python3 -B updater/ios.py check
+      - name: Run extension contract tests
+        run: python3 -B -m unittest discover -s tests -v
+
+  android:
+    name: Android (${{ matrix.name }})
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: current
+            bob_url: https://github.com/defold/defold/releases/download/1.13.1-beta/bob.jar
+            bob_sha256: b3036943f78ec977f3b3fad54ea7117bfe9eb61a59621cd387fe520fa2934282
+            build_server: https://build-stage.defold.com
+          - name: Defold-1.13.0-minimum
+            bob_url: https://github.com/defold/defold/releases/download/1.13.0/bob.jar
+            bob_sha256: 22e651025834603794ba6873b09924f11412dff66eee0e38aaef8955eb534655
+            build_server: https://build.defold.com
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          java-version: "25"
+          distribution: temurin
+          architecture: x64
+      - name: Download and verify Bob
+        env:
+          BOB_JAR_URL: ${{ matrix.bob_url }}
+          BOB_JAR_SHA256: ${{ matrix.bob_sha256 }}
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/bob.jar" "$BOB_JAR_URL"
+          printf '%s  %s\n' "$BOB_JAR_SHA256" "$RUNNER_TEMP/bob.jar" |
+            sha256sum -c -
+          java -jar "$RUNNER_TEMP/bob.jar" --version
+      - name: Resolve libraries
+        run: java -jar "$RUNNER_TEMP/bob.jar" resolve
+      - name: Build Android native extension
+        env:
+          BUILD_SERVER: ${{ matrix.build_server }}
+        run: |
+          java -jar "$RUNNER_TEMP/bob.jar" \
+            --platform=armv7-android \
+            --architectures=armv7-android,arm64-android \
+            --archive \
+            --build-server="$BUILD_SERVER" \
+            --output=build/bob-android \
+            build
+      - name: Bundle APK
+        run: |
+          java -jar "$RUNNER_TEMP/bob.jar" \
+            --platform=armv7-android \
+            --architectures=armv7-android,arm64-android \
+            --bundle-format=apk \
+            --output=build/bob-android \
+            --bundle-output=dist/android \
+            bundle
+          find dist/android -type f -name '*.apk' -print -quit | grep -q .
+      - name: Print build log on failure
+        if: failure()
+        run: find build -name log.txt -type f -exec cat {} \;
+
+  ios:
+    name: iOS framework privacy contract
+    needs: verify
+    runs-on: macos-latest
+    env:
+      BOB_JAR_URL: https://github.com/defold/defold/releases/download/1.13.1-beta/bob.jar
+      BOB_JAR_SHA256: b3036943f78ec977f3b3fad54ea7117bfe9eb61a59621cd387fe520fa2934282
+      BUILD_SERVER: https://build-stage.defold.com
+    steps:
+      # The upstream reusable workflow exposes neither a Bob checksum input
+      # nor bundle artifacts, so the security- and artifact-sensitive mobile
+      # builds stay local to this workflow.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          java-version: "25"
+          distribution: temurin
+          architecture: x64
+      - name: Download and verify Bob
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/bob.jar" "$BOB_JAR_URL"
+          printf '%s  %s\n' "$BOB_JAR_SHA256" "$RUNNER_TEMP/bob.jar" |
+            shasum -a 256 -c -
+          java -jar "$RUNNER_TEMP/bob.jar" --version
+      - name: Resolve libraries
+        run: java -jar "$RUNNER_TEMP/bob.jar" resolve
+      - name: Build iOS native extension
+        run: |
+          java -jar "$RUNNER_TEMP/bob.jar" \
+            --platform=arm64-ios \
+            --architectures=arm64-ios \
+            --archive \
+            --build-server="$BUILD_SERVER" \
+            --output=build/bob-ios \
+            build
+      - name: Bundle and verify framework privacy manifest
+        run: |
+          java -jar "$RUNNER_TEMP/bob.jar" \
+            --platform=arm64-ios \
+            --architectures=arm64-ios \
+            --output=build/bob-ios \
+            --bundle-output=dist/ios \
+            bundle
+          IPA_PATH="$(find dist/ios -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          APPLOVIN_IPA="$IPA_PATH" python3 -B -m unittest \
+            tests.test_packaging.PackagingContractTests.test_bob_ipa_preserves_framework_privacy_manifest \
+            -v
+      - name: Print build log on failure
+        if: failure()
+        run: find build -name log.txt -type f -exec cat {} \;

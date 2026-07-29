@@ -3,114 +3,201 @@
 #include "applovin_callback_private.h"
 #include "utils/LuaUtils.h"
 #include <stdlib.h>
+#include <string.h>
 
 namespace dmAppLovin {
 
-static dmScript::LuaCallbackInfo* m_luaCallback = 0x0;
-static dmArray<CallbackData> m_callbacksQueue;
-static dmMutex::HMutex m_mutex;
+static dmScript::LuaCallbackInfo* g_LuaCallback = 0;
+static dmArray<CallbackData> g_CallbackQueue;
+static dmMutex::HMutex g_CallbackMutex = 0;
+static bool g_CallbackActive = false;
+static uint32_t g_CallbackInvocationDepth = 0;
+static dmArray<dmScript::LuaCallbackInfo*> g_DeferredCallbacks;
 
-static void DestroyCallback()
+static void FreeCallbackData(CallbackData& data)
 {
-    if (m_luaCallback != 0x0)
+    free(data.name);
+    free(data.json);
+    data.name = 0;
+    data.json = 0;
+}
+
+static void FreeCallbacks(dmArray<CallbackData>& callbacks)
+{
+    for (uint32_t i = 0; i < callbacks.Size(); ++i)
     {
-        dmScript::DestroyCallback(m_luaCallback);
-        m_luaCallback = 0x0;
+        FreeCallbackData(callbacks[i]);
     }
 }
 
-static void InvokeCallback(const char* name, const char* json)
+// A Lua callback may replace or clear itself. Keep retired callbacks rooted
+// until the outermost invocation has restored the script context.
+static void FlushDeferredCallbacks()
 {
-    if (!dmScript::IsCallbackValid(m_luaCallback))
+    if (g_CallbackInvocationDepth != 0)
     {
-        dmLogError("AppLovin callback is invalid. Set new callback unsing `applovin.setCallback()` function.");
+        return;
+    }
+    for (uint32_t i = 0; i < g_DeferredCallbacks.Size(); ++i)
+    {
+        dmScript::DestroyCallback(g_DeferredCallbacks[i]);
+    }
+    g_DeferredCallbacks.SetSize(0);
+}
+
+static void RetireCallback(dmScript::LuaCallbackInfo* callback)
+{
+    if (!callback)
+    {
+        return;
+    }
+    if (g_CallbackInvocationDepth == 0)
+    {
+        dmScript::DestroyCallback(callback);
+        return;
+    }
+    if (g_DeferredCallbacks.Full())
+    {
+        g_DeferredCallbacks.OffsetCapacity(4);
+    }
+    g_DeferredCallbacks.Push(callback);
+}
+
+static void DestroyCallback()
+{
+    dmScript::LuaCallbackInfo* callback = g_LuaCallback;
+    g_LuaCallback = 0;
+    RetireCallback(callback);
+}
+
+static void InvokeCallback(const CallbackData& data)
+{
+    dmScript::LuaCallbackInfo* callback = g_LuaCallback;
+    if (!dmScript::IsCallbackValid(callback))
+    {
+        dmLogError("AppLovin callback is invalid. Set it with applovin.set_callback().");
+        if (callback == g_LuaCallback)
+        {
+            g_LuaCallback = 0;
+            RetireCallback(callback);
+        }
         return;
     }
 
-    lua_State* L = dmScript::GetCallbackLuaContext(m_luaCallback);
+    lua_State* L = dmScript::GetCallbackLuaContext(callback);
     int top = lua_gettop(L);
 
-    if (!dmScript::SetupCallback(m_luaCallback))
+    if (!dmScript::SetupCallback(callback))
     {
         return;
     }
 
-    lua_pushstring(L, name);
-    dmScript::JsonToLua(L, json, strlen(json)); // throws lua error if it fails
+    lua_pushstring(L, data.name ? data.name : "");
+    const char* json = data.json ? data.json : "{}";
+    const int jsonTop = lua_gettop(L);
+    if (dmScript::JsonToLua(L, json, strlen(json)) != 1 || !lua_istable(L, -1))
+    {
+        lua_settop(L, jsonTop);
+        lua_newtable(L);
+    }
 
-    int number_of_arguments = 3;
-    int ret = dmScript::PCall(L, number_of_arguments, 0);
-    (void)ret;
-    dmScript::TeardownCallback(m_luaCallback);
+    ++g_CallbackInvocationDepth;
+    dmScript::PCall(L, 3, 0);
+    dmScript::TeardownCallback(callback);
 
     assert(top == lua_gettop(L));
+    assert(g_CallbackInvocationDepth > 0);
+    --g_CallbackInvocationDepth;
+    FlushDeferredCallbacks();
 }
 
 void InitializeCallback()
 {
-    m_mutex = dmMutex::New();
+    if (!g_CallbackMutex)
+    {
+        // Keep the mutex alive for the process lifetime. Native callbacks can
+        // already be in flight when the extension is finalized.
+        g_CallbackMutex = dmMutex::New();
+    }
+    DM_MUTEX_SCOPED_LOCK(g_CallbackMutex);
+    g_CallbackActive = true;
 }
 
 void FinalizeCallback()
 {
-    dmMutex::Delete(m_mutex);
+    if (g_CallbackMutex)
+    {
+        dmArray<CallbackData> pending;
+        {
+            DM_MUTEX_SCOPED_LOCK(g_CallbackMutex);
+            g_CallbackActive = false;
+            pending.Swap(g_CallbackQueue);
+        }
+        FreeCallbacks(pending);
+    }
     DestroyCallback();
+    FlushDeferredCallbacks();
 }
 
 void SetLuaCallback(lua_State* L, int pos)
 {
-    int type = lua_type(L, pos);
-    if (type == LUA_TNONE || type == LUA_TNIL)
+    dmScript::LuaCallbackInfo* replacement = 0;
+    if (!lua_isnoneornil(L, pos))
     {
-        DestroyCallback();
+        luaL_checktype(L, pos, LUA_TFUNCTION);
+        replacement = dmScript::CreateCallback(L, pos);
     }
-    else
-    {
-        m_luaCallback = dmScript::CreateCallback(L, pos);
-    }
+
+    dmScript::LuaCallbackInfo* previous = g_LuaCallback;
+    g_LuaCallback = replacement;
+    RetireCallback(previous);
 }
 
 void AddToQueueCallback(const char* name, const char* json)
 {
     CallbackData data;
-    data.name = name ? strdup(name) : NULL;
-    data.json = json ? strdup(json) : NULL;
+    data.name = strdup(name ? name : "");
+    data.json = strdup(json ? json : "{}");
 
-    DM_MUTEX_SCOPED_LOCK(m_mutex);
-    if(m_callbacksQueue.Full())
+    if (!g_CallbackMutex)
     {
-        m_callbacksQueue.OffsetCapacity(2);
+        FreeCallbackData(data);
+        return;
     }
-    m_callbacksQueue.Push(data);
+    DM_MUTEX_SCOPED_LOCK(g_CallbackMutex);
+    if (!g_CallbackActive)
+    {
+        FreeCallbackData(data);
+        return;
+    }
+    if (g_CallbackQueue.Full())
+    {
+        g_CallbackQueue.OffsetCapacity(8);
+    }
+    g_CallbackQueue.Push(data);
 }
 
 void UpdateCallback()
 {
-    if (m_callbacksQueue.Empty())
+    if (!g_CallbackMutex)
     {
         return;
     }
 
-    dmArray<CallbackData> tmp;
+    dmArray<CallbackData> pending;
     {
-        DM_MUTEX_SCOPED_LOCK(m_mutex);
-        tmp.Swap(m_callbacksQueue);
+        DM_MUTEX_SCOPED_LOCK(g_CallbackMutex);
+        if (!g_CallbackActive || g_CallbackQueue.Empty())
+        {
+            return;
+        }
+        pending.Swap(g_CallbackQueue);
     }
-    
-    for(uint32_t i = 0; i != tmp.Size(); ++i)
+
+    for (uint32_t i = 0; i < pending.Size(); ++i)
     {
-        CallbackData* data = &tmp[i];
-        InvokeCallback(data->name, data->json);
-        if(data->name)
-        {
-            free(data->name);
-            data->name = 0;
-        }
-        if(data->json)
-        {
-            free(data->json);
-            data->json = 0;
-        }
+        InvokeCallback(pending[i]);
+        FreeCallbackData(pending[i]);
     }
 }
 

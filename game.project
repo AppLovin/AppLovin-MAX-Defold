@@ -2,7 +2,7 @@
 main_collection = /example/main.collectionc
 
 [script]
-shared_state = 1
+shared_state = 0
 
 [display]
 width = 720
@@ -10,21 +10,24 @@ height = 1280
 
 [project]
 title = AppLovinMAXDefoldDemo
-version = 1.1.0
+version = 2.0.0
 bundle_resources = /extension-applovin/res/ios
-dependencies#0 = https://github.com/andsve/dirtylarry/archive/master.zip
+dependencies#0 = https://github.com/AGulev/dirtylarry/archive/2da18ae4785977cfa4cbcdaa333589581e6ee62c.zip
 
 [library]
 include_dirs = extension-applovin
+defold_min_version = 1.13.0
 
 [android]
-package = YOUR_PACKAGE_NAME
-minimum_sdk_version = 21
-debuggable = 1
+package = com.defold.applovin.demo
+minimum_sdk_version = 24
+target_sdk_version = 36
 
 [ios]
-bundle_identifier = YOUR_BUNDLE_IDENTIFIER
+bundle_identifier = com.defold.applovin.demo
 
 [applovin]
-ios_user_tracking_usage_description = 
-
+demo_sdk_key = 05TMDQ5tZabpXQ45_UTbmEGNUtVAzSTzT6KmWQc5_CuWdzccS4DCITZoL3yIWUG3bbq60QC_d4WF28tUC4gVTF
+ios_user_tracking_usage_description = This app uses device information to provide more relevant ads and content.
+unity_ads_android = 1
+unity_ads_ios = 1
