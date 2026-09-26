@@ -193,14 +193,20 @@ static int Lua_SetTestDeviceAdvertisingIds(lua_State* L)
     DM_LUA_STACK_CHECK(L, 0);
     luaL_checktype(L, 1, LUA_TTABLE);
     int count = lua_objlen(L, 1);
-    const char* advertisingIds[count];
+    if (count == 0)
+    {
+        SetTestDeviceAdvertisingIds(0, 0);
+        return 0;
+    }
+    dmArray<const char*> advertisingIds;
+    advertisingIds.SetCapacity(count);
     for (int i = 0; i < count; ++i)
     {
         lua_rawgeti(L, 1, i + 1);
-        advertisingIds[i] = lua_tostring(L, -1);
+        advertisingIds.Push(lua_tostring(L, -1));
         lua_pop(L, 1);
     }
-    SetTestDeviceAdvertisingIds(advertisingIds, count);
+    SetTestDeviceAdvertisingIds(advertisingIds.Begin(), count);
     return 0;
 }
 
@@ -476,7 +482,7 @@ static const luaL_reg Module_methods[] =
     {"load_interstitial", Lua_LoadInterstitial},
     {"is_interstitial_ready", Lua_IsInterstitialReady},
     {"show_interstitial", Lua_ShowInterstitial},
-    {"set_interstitial_extra_parameter", Lua_SetRewardedAdExtraParameter},
+    {"set_interstitial_extra_parameter", Lua_SetInterstitialExtraParameter},
     {"load_rewarded_ad", Lua_LoadRewardedAd},
     {"is_rewarded_ad_ready", Lua_IsRewardedAdReady},
     {"show_rewarded_ad", Lua_ShowRewardedAd},
